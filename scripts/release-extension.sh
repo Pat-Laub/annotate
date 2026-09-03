@@ -3,13 +3,14 @@
 #   git subtree add --prefix=_extensions/Pat-Laub/scribble <repo> <tag> --squash
 #
 # `git subtree split` cannot be used here: this repo *contains* another subtree
-# (Pat-Laub/slide-stage), and split dies on that subtree's squash commit with
-# "no new revisions were found". Building the payload commit directly is both
-# simpler and immune to that, and --squash consumers never look at its history.
+# (Pat-Laub/slide-stage, for the fixture decks), and split dies on that
+# subtree's squash commit with "no new revisions were found". Building the
+# payload commit directly is simpler and immune to that, and --squash consumers
+# never look at its history.
 set -eu
 
-PREFIX=_extensions/Pat-Laub/scribble
-BRANCH=dist-scribble
+PREFIX=_extensions/Pat-Laub/annotate
+BRANCH=dist
 TAG=${1:?usage: release-extension.sh <tag>}
 
 tree=$(git rev-parse "HEAD:$PREFIX")

@@ -5,3 +5,6 @@ playwright-report/
 .DS_Store
 docs/
 *_files/
+
+/.quarto/
+**/*.quarto_ipynb
