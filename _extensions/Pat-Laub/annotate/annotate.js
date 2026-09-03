@@ -535,8 +535,8 @@
     ink[key] = JSON.parse(from[key].pop());
     render();
     save();
-      sendAll();
-}
+    sendAll();
+  }
 
   // This slide, or with Shift the whole deck. A deck-wide clear asks first: it
   // is undoable, but only a slide at a time, so putting it all back is a walk
@@ -549,8 +549,8 @@
     keys.forEach(function (k) { snapshot(k); ink[k] = []; });
     render();
     save();
-      sendAll();
-}
+    sendAll();
+  }
 
   function deletePage() {
     if (!window.AnnotatePages || !AnnotatePages.canRemove()) return;
@@ -651,8 +651,8 @@
     widths[tool] = clampWidth(tool, Math.round(w * 10) / 10);
     try { localStorage.setItem(WIDTH_STORE, JSON.stringify(widths)); } catch (e) { /* full or blocked */ }
     sync();
-      sendAll();
-}
+    sendAll();  // a width change applies to the viewers' next stroke too
+  }
 
   function save() {
     if (MUX === 'viewer') return;  // the presenter's ink is not this browser's to keep
@@ -775,8 +775,8 @@
       save();
     };
     reader.readAsText(file);
-      sendAll();
-}
+    sendAll();
+  }
 
   /* ---------------------------- ink in the PDF --------------------------- */
 
@@ -1811,8 +1811,8 @@
     marked = [];
     render();  // takes the faded paths away along with the strokes they showed
     save();
-      sendAll();
-}
+    sendAll();
+  }
 
   /* ---------------------------------- UI --------------------------------- */
 
@@ -1898,8 +1898,8 @@
     if (!on) moreOpen = false;
     hidden = false;  // the ink comes back with the tools that made it
     sync();
-      sendAll();
-}
+    sendAll();  // opening the tools is not itself ink, but the state is shared
+  }
 
   // Park the ink: the slide as it was written, without the writing on it, for
   // showing the audience the point before the working. Drawing is suspended
@@ -1910,8 +1910,8 @@
     hidden = on;
     if (on) moreOpen = false;
     sync();
-      sendAll();
-}
+    sendAll();  // the audience is who the ink was parked for
+  }
 
   // The colour this tool draws in: the swatch's own, except that the first one
   // is a highlighter's yellow while the highlighter is out.
@@ -1999,7 +1999,7 @@
     Object.keys(layers).forEach(function (t) {
       layers[t].classList.toggle('ink-hidden', hidden);
     });
-    guide.classList.toggle('ink-rules-hidden', !ruled);
+    guide.classList.toggle('ink-rules-hidden', !ruled || hidden);
     selectionLayer.classList.toggle('ink-hidden', hidden || tool !== 'select');
     // A recognised scribble lights the eraser, but only on the panel: the tool
     // itself has to stay the pen, or the stroke being drawn would be cut off.
@@ -2363,6 +2363,13 @@
     Reveal.removeKeyBinding(82);
     Reveal.configure({ scrollActivationWidth: null });
 
+    Reveal.addKeyBinding(
+      { keyCode: 68, key: 'D', description: 'Toggle drawing tools' },
+      function () {
+        if (hidden) return hide(false);  // parked ink comes back before anything else
+        open(!tool);
+      }
+    );
     Reveal.addKeyBinding(
       { keyCode: 86, key: 'V', description: 'Hide/show the annotations' },
       function () { hide(!hidden); }
