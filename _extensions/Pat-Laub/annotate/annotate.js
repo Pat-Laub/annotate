@@ -824,6 +824,21 @@
     return pattern.replace('{deck}', deck);
   }
 
+  // The overlay writes ink onto pages that already exist, so it wants the
+  // strokes grouped by the layer they belong on rather than the shape create()
+  // draws from. Text boxes are not carried: they are drawn by create(), and the
+  // published PDF already has the deck's own typography.
+  function overlayPages() {
+    return printableSlides().map(function (slide) {
+      var list = ink[slideKey(slide)] || [];
+      function shaped(t) {
+        return list.filter(function (a) { return a.t === t && !isText(a); })
+          .map(function (stroke) { return { colour: stroke.c, path: pathData(stroke) }; });
+      }
+      return { pen: shaped('pen'), highlighter: shaped('highlighter') };
+    });
+  }
+
   // Fetch the PDF published beside this deck and append the ink to it. If there
   // is none -- it has not been published yet, or this deck never publishes one
   // -- fall back to drawing the pages here rather than failing outright.
@@ -876,7 +891,7 @@
         };
       });
       var wanted = pdfOptions();
-      if (wanted.mode === 'overlay') return overlayPublishedPdf(pages, wanted);
+      if (wanted.mode === 'overlay') return overlayPublishedPdf(overlayPages(), wanted);
       var data = AnnotationPdf.create({
         width: W,
         height: H,
