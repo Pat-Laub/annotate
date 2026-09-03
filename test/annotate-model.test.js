@@ -92,15 +92,20 @@ test('a coalesced batch that repeats the previous one adds nothing', () => {
   assert.deepEqual(p, [[0, 0, 0.5], [4, 0, 0.5], [8, 0, 0.5]]);
 });
 
+// The thresholds below are the test's own, not the module's defaults: those are
+// distances in page units and change with the authored page, and a fixture tied
+// to them would have to be rescaled every time the page did.
+const FINE = { repeat: 32, step: 0.5, flat: 0.15, span: 12, pressure: 0.03 };
+
 test('samples closer together than a step say nothing new', () => {
   const p = [[0, 0, 0.5]];
-  assert.equal(appendSamples(p, [[0.1, 0.1, 0.5], [0.2, 0, 0.5]]).added, 0);
-  assert.equal(appendSamples(p, [[1, 0, 0.5]]).added, 1);
+  assert.equal(appendSamples(p, [[0.1, 0.1, 0.5], [0.2, 0, 0.5]], FINE).added, 0);
+  assert.equal(appendSamples(p, [[1, 0, 0.5]], FINE).added, 1);
 });
 
 test('a straight run is thinned to its ends while a curve keeps its points', () => {
   const straight = [[0, 0, 0.5]];
-  for (let x = 1; x <= 10; x++) appendSamples(straight, [[x, 0, 0.5]]);
+  for (let x = 1; x <= 10; x++) appendSamples(straight, [[x, 0, 0.5]], FINE);
   // A flat run collapses to its start, one anchor and the tip: the point
   // behind the tip keeps being taken back as each new sample stands for it.
   assert.equal(straight.length, 3);
@@ -109,7 +114,7 @@ test('a straight run is thinned to its ends while a curve keeps its points', () 
   const curved = [[0, 0, 0.5]];
   for (let i = 1; i <= 10; i++) {
     const a = (i / 10) * Math.PI;
-    appendSamples(curved, [[10 * Math.cos(a), 10 * Math.sin(a), 0.5]]);
+    appendSamples(curved, [[10 * Math.cos(a), 10 * Math.sin(a), 0.5]], FINE);
   }
   assert.ok(curved.length > 8);
 });
@@ -117,22 +122,22 @@ test('a straight run is thinned to its ends while a curve keeps its points', () 
 test('thinning never touches the newest sample, so the ink stays under the nib', () => {
   const p = [[0, 0, 0.5], [1, 0, 0.5], [2, 0, 0.5]];
   const tip = [3, 0, 0.5];
-  appendSamples(p, [tip]);
+  appendSamples(p, [tip], FINE);
   assert.deepEqual(p[p.length - 1], tip);
 });
 
 test('a change of pressure holds a point that is otherwise flat', () => {
-  assert.equal(flatEnough([0, 0, 0.5], [1, 0, 0.5], [2, 0, 0.5]), true);
-  assert.equal(flatEnough([0, 0, 0.3], [1, 0, 0.5], [2, 0, 0.5]), false);
+  assert.equal(flatEnough([0, 0, 0.5], [1, 0, 0.5], [2, 0, 0.5], FINE), true);
+  assert.equal(flatEnough([0, 0, 0.3], [1, 0, 0.5], [2, 0, 0.5], FINE), false);
   // A neighbour pair further apart than the span is not allowed to stand in.
-  assert.equal(flatEnough([0, 0, 0.5], [10, 0, 0.5], [20, 0, 0.5]), false);
+  assert.equal(flatEnough([0, 0, 0.5], [10, 0, 0.5], [20, 0, 0.5], FINE), false);
   // Nor is one the middle point sits visibly off.
-  assert.equal(flatEnough([0, 0, 0.5], [1, 2, 0.5], [2, 0, 0.5]), false);
+  assert.equal(flatEnough([0, 0, 0.5], [1, 2, 0.5], [2, 0, 0.5], FINE), false);
 });
 
 test('a dropped point is reported, so a live path knows to redraw', () => {
   const p = [[0, 0, 0.5], [1, 0, 0.5], [2, 0, 0.5]];
-  const added = appendSamples(p, [[3, 0, 0.5]]);
+  const added = appendSamples(p, [[3, 0, 0.5]], FINE);
   assert.equal(added.added, 1);
   assert.equal(added.dropped, 1);
 });
@@ -142,7 +147,7 @@ test('a dropped point is reported, so a live path knows to redraw', () => {
 // count alone does not say which points to send.
 test('appending reports the samples it kept, not only how many', () => {
   const p = [[0, 0, 0.5]];
-  const result = appendSamples(p, [[0.1, 0, 0.5], [4, 0, 0.5], [8, 0, 0.5]]);
+  const result = appendSamples(p, [[0.1, 0, 0.5], [4, 0, 0.5], [8, 0, 0.5]], FINE);
   assert.ok(Array.isArray(result.kept), 'no kept points were reported');
   assert.equal(result.kept.length, result.added);
   // What was kept is exactly what the stroke grew by, in order.
