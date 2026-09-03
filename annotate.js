@@ -2224,7 +2224,7 @@
         '<hr>' +
         option('data-act', 'clear', 'Clear this slide', 'Clear this slide (⇧ for the whole deck)') +
         option('data-act', 'delete-page', 'Delete this page') +
-        option('data-act', 'print', 'Download annotated PDF') +
+        option('data-act', 'pdf', 'Download annotated PDF') +
         option('data-act', 'download', 'Export annotations') +
         option('data-act', 'upload', 'Import annotations') +
       '</div>';
@@ -2313,7 +2313,7 @@
         moreOpen = !moreOpen;
       } else if (b.dataset.act === 'download') {
         download();
-      } else if (b.dataset.act === 'print') {
+      } else if (b.dataset.act === 'pdf') {
         downloadPdf();
       } else if (b.dataset.act === 'upload') {
         picker.click();
