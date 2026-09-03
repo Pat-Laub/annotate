@@ -158,7 +158,12 @@
   var widths = readWidths(); // active presets for the next stroke of each tool
   var ink = MUX === 'viewer' ? {} : read();
   var undos = {}, redos = {};// { slideKey: [JSON snapshot, ...] }
-  var tool = 'pen';          // this deck opens ready to write
+  // Whether the tools are in hand from the start; set in init() from the deck's
+  // own config, since the option only exists once Reveal is configured. A blank
+  // writing pad is opened to write on, so they are; a lecture deck is opened to
+  // present, so they are not, and it gets a corner button to reach for them.
+  var toolsOpen = false;
+  var tool = null;
   var lastTool = 'pen';      // restored after temporarily hiding the tools
   var hidden = false;        // the ink is parked, showing the slide underneath
   var chrome = MUX !== 'viewer';  // the bottom-left corner buttons are on show
@@ -195,7 +200,7 @@
   var hovers = 0;            // consecutive hovering mouse moves; see hover()
   var sessionStarted = Date.now();
   var diagnostics = [];      // bounded, session-only input trace; exported with ink
-  var W, H, slides, surface, panel, picker, guide, rulesPath, selectionLayer, selectionBox, saveTimer;
+  var W, H, slides, surface, panel, picker, toggle, guide, rulesPath, selectionLayer, selectionBox, saveTimer;
 
   /* ------------------------------ stroke maths --------------------------- */
 
@@ -2142,6 +2147,18 @@
     window.addEventListener('unhandledrejection', function (e) {
       trace('unhandledrejection', e, true, String(e.reason || 'unknown rejection'));
     });
+    // With a tool in hand the surface takes the click, and the surface hangs off
+    // the stage rather than `.reveal` -- so reveal's zoom plugin, which listens
+    // on the reveal element, never hears an Option-click and the deck refuses to
+    // magnify until the tool is put down. Hand it the click it is owed. The copy
+    // is untrusted, which is also what keeps it from coming back through here.
+    window.addEventListener('mousedown', function (e) {
+      if (!e.isTrusted || !e[zoomModifier()] || !ours(e)) return;
+      Reveal.getRevealElement().dispatchEvent(new MouseEvent('mousedown', {
+        bubbles: true, clientX: e.clientX, clientY: e.clientY,
+        altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey
+      }));
+    }, true);
     // The right button is the eraser here, so it has no menu to bring up — one
     // would land mid-stroke and interrupt the erase it was part of.
     window.addEventListener('contextmenu', function (e) {
@@ -2224,6 +2241,19 @@
     });
     panel.appendChild(picker);
 
+    // A deck that opens closed needs a way in. The pad does not: its tools are
+    // already in hand, and a button to open them would do nothing.
+    if (!toolsOpen) {
+      toggle = document.createElement('button');
+      toggle.className = 'ink-toggle ink-pen';
+      toggle.title = 'Annotate (d), hide the ink (v)';
+      toggle.innerHTML = icon('pen');
+      toggle.addEventListener('click', function () {
+        if (hidden) return hide(false);  // parked ink comes back before anything else
+        open(!tool);
+      });
+    }
+
     var full = document.createElement('button');
     full.className = 'ink-toggle';
     full.title = 'Full screen (f)';
@@ -2235,6 +2265,7 @@
     // Sit clear of the menu plugin's button, which shares this corner.
     if (document.querySelector('.slide-menu-button')) launchers.classList.add('ink-offset');
     launchers.appendChild(full);
+    if (toggle) launchers.appendChild(toggle);
 
     var parent = document.querySelector('[data-deck-stage]') || Reveal.getRevealElement();
     parent.appendChild(panel);
@@ -2300,6 +2331,9 @@
     view = [-OVERSCAN * W, -OVERSCAN * H, (1 + 2 * OVERSCAN) * W, (1 + 2 * OVERSCAN) * H];
     build();
     render();
+    var opts = (Reveal.getConfig && Reveal.getConfig().annotate) || {};
+    toolsOpen = opts.tools === 'open';
+    if (toolsOpen && !tool) open(true);
     showChrome(chrome);
 
     // Every window shows what the transport hands it. Every window but a viewer

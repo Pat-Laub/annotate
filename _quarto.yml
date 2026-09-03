@@ -22,4 +22,6 @@ format:
     revealjs-plugins:
       - annotate
     annotate:
+      # A blank pad is opened to write on.
+      tools: open
       pages: true
