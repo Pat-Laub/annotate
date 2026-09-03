@@ -818,7 +818,9 @@
   }
 
   function publishedPdfUrl(pattern) {
-    var deck = location.pathname.replace(/\.[^./]*$/, '');
+    // `.slides.html` as one extension, not two: stripping only the last would
+    // ask for `<deck>.slides.pdf`, which is not what anything publishes.
+    var deck = location.pathname.replace(/\.slides\.html?$|\.html?$/, '');
     return pattern.replace('{deck}', deck);
   }
 
@@ -845,9 +847,12 @@
     });
   }
 
+  // The deck's own file name, not its title: a title is prose and makes an
+  // unwieldy download, and the published PDF beside it is named this way too.
   function deckFileName() {
-    return (document.title || 'Slides').trim()
-      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-') || 'Slides';
+    var name = (location.pathname.split('/').pop() || 'slides')
+      .replace(/\.slides\.html?$|\.html?$/, '');
+    return decodeURIComponent(name).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-') || 'slides';
   }
 
   function downloadPdf() {
