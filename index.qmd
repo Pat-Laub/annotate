@@ -1,0 +1,5 @@
+---
+pagetitle: Annotate fixture
+---
+
+## {#scribble-slide-001 .annotation-slide-heading}

@@ -1,0 +1,25 @@
+project:
+  type: default
+  output-dir: docs
+  render:
+    - index.qmd
+    - no-pages.qmd
+
+# The fixture decks the tests measure. `index.qmd` opts into page growth so the
+# page machinery is exercised; `no-pages.qmd` leaves it at its default so the
+# behaviour every lecture deck relies on is tested too.
+format:
+  slide-stage-revealjs:
+    theme: [white, fixture.scss, _extensions/Pat-Laub/annotate/annotate.scss]
+    controls: true
+    controls-layout: bottom-right
+    controls-back-arrows: visible
+    navigation-mode: linear
+    touch: true
+    transition: none
+    slide-number: c/t
+    preview-links: false
+    revealjs-plugins:
+      - annotate
+    annotate:
+      pages: true
