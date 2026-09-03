@@ -116,6 +116,28 @@
   };
   var SVG_NS = 'http://www.w3.org/2000/svg';
   var STORE = 'reveal-ink:' + location.pathname;
+
+  // Which end of a multiplexed deck this is. The role is stored per device by a sign-in
+  // page and read from the same localStorage keys the
+  // multiplex plugin uses, so no ids travel in URLs. 'audience' is this file's
+  // 'viewer'. See the multiplexing section below.
+  //
+  // Every window takes what the multiplex plugin hands it, whatever this says.
+  // What this decides is what a window puts back: a viewer is a screen being
+  // watched -- the projector, or a window opened with ?mirror to be shown on
+  // one -- and it draws nothing, keeps nothing and sends nothing of its own.
+  var MUX = (function () {
+    try {
+      // Per window rather than per device, since both windows of one browser
+      // share the localStorage the role below is kept in.
+      if (new URLSearchParams(location.search).has('mirror')) return 'viewer';
+      var role = localStorage.getItem('multiplex-role');
+      if (!localStorage.getItem('multiplex-token')) return null;
+      return role === 'presenter' ? 'presenter' : role === 'audience' ? 'viewer' : null;
+    } catch (e) {
+      return null;  // storage blocked: an ordinary deck
+    }
+  })();
   var PRINT = /(?:^|[?&])print-pdf(?:[=&]|$)/i.test(location.search);
   var PRINT_INK = PRINT && /(?:^|[?&])ink(?:[=&]|$)/i.test(location.search);
   var RULE_STORE = 'reveal-ink-rules';
@@ -134,12 +156,12 @@
   // c: colour, f: font size, v: value, p: four box corners }. Everything that
   // affects rendering travels with the annotation.
   var widths = readWidths(); // active presets for the next stroke of each tool
-  var ink = read();
+  var ink = MUX === 'viewer' ? {} : read();
   var undos = {}, redos = {};// { slideKey: [JSON snapshot, ...] }
   var tool = 'pen';          // this deck opens ready to write
   var lastTool = 'pen';      // restored after temporarily hiding the tools
   var hidden = false;        // the ink is parked, showing the slide underneath
-  var chrome = true;         // the bottom-left corner buttons are on show
+  var chrome = MUX !== 'viewer';  // the bottom-left corner buttons are on show
   var ruled = readRules();    // local view preference; never part of shared ink
   var ruleSpacing = readRuleSpacing(); // browser-local guide density
   var pressureEnabled = readPressure(); // captured into each new stroke's points
@@ -508,7 +530,8 @@
     ink[key] = JSON.parse(from[key].pop());
     render();
     save();
-  }
+      sendAll();
+}
 
   // This slide, or with Shift the whole deck. A deck-wide clear asks first: it
   // is undoable, but only a slide at a time, so putting it all back is a walk
@@ -521,7 +544,8 @@
     keys.forEach(function (k) { snapshot(k); ink[k] = []; });
     render();
     save();
-  }
+      sendAll();
+}
 
   function deletePage() {
     if (!window.AnnotatePages || !AnnotatePages.canRemove()) return;
@@ -622,9 +646,11 @@
     widths[tool] = clampWidth(tool, Math.round(w * 10) / 10);
     try { localStorage.setItem(WIDTH_STORE, JSON.stringify(widths)); } catch (e) { /* full or blocked */ }
     sync();
-  }
+      sendAll();
+}
 
   function save() {
+    if (MUX === 'viewer') return;  // the presenter's ink is not this browser's to keep
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
       try {
@@ -744,7 +770,8 @@
       save();
     };
     reader.readAsText(file);
-  }
+      sendAll();
+}
 
   /* ---------------------------- ink in the PDF --------------------------- */
 
@@ -770,6 +797,54 @@
   // directly as compact vector PDF pages. This bypasses the operating system's
   // print-paper choices entirely — notably iPad Safari's forced A4 page — while
   // retaining the exact deck aspect ratio, ruled guides and pressure-shaped ink.
+  // Which PDF strategy this deck wants, and where a published one lives.
+  // `generate` draws the pages here from nothing; `overlay` reads a PDF
+  // published beside the deck and writes the ink into it, which keeps the
+  // deck's own typography rather than redrawing it. `{deck}` is this deck's
+  // path with its extension dropped -- the same file the deck's own
+  // "Slides (pdf)" link points at -- and any other URL works just as well.
+  function pdfOptions() {
+    var cfg = window.Reveal && Reveal.getConfig ? Reveal.getConfig() : null;
+    var o = (cfg && cfg.annotate) || {};
+    return {
+      mode: o.pdf === 'overlay' ? 'overlay' : 'generate',
+      source: o.pdfSource || '{deck}.pdf'
+    };
+  }
+
+  function publishedPdfUrl(pattern) {
+    var deck = location.pathname.replace(/\.[^./]*$/, '');
+    return pattern.replace('{deck}', deck);
+  }
+
+  // Fetch the PDF published beside this deck and append the ink to it. If there
+  // is none -- it has not been published yet, or this deck never publishes one
+  // -- fall back to drawing the pages here rather than failing outright.
+  function overlayPublishedPdf(pages, wanted) {
+    var url = publishedPdfUrl(wanted.source);
+    var name = deckFileName();
+    return fetch(url, { cache: 'no-store' }).then(function (response) {
+      if (!response.ok) throw new Error('No published PDF at ' + url + ' (' + response.status + ').');
+      return response.arrayBuffer();
+    }).then(function (buffer) {
+      var out = AnnotationPdf.overlay(new Uint8Array(buffer), pages, { width: W, height: H });
+      saveBlob(new Blob([out], { type: 'application/pdf' }), name + '-annotated.pdf');
+    }).catch(function (error) {
+      console.warn('Overlaying the published PDF failed; drawing one instead.', error);
+      var data = AnnotationPdf.create({
+        width: W, height: H, pages: pages,
+        rules: ruled ? AnnotationGeometry.rulePositions(H, ruleSpacing, RULES.margin) : [],
+        ruleMargin: RULES.margin
+      });
+      saveBlob(new Blob([data], { type: 'application/pdf' }), name + '.pdf');
+    });
+  }
+
+  function deckFileName() {
+    return (document.title || 'Slides').trim()
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-') || 'Slides';
+  }
+
   function downloadPdf() {
     if (!window.AnnotationPdf) return printPdf();
     try {
@@ -790,6 +865,8 @@
           })
         };
       });
+      var wanted = pdfOptions();
+      if (wanted.mode === 'overlay') return overlayPublishedPdf(pages, wanted);
       var data = AnnotationPdf.create({
         width: W,
         height: H,
@@ -1030,6 +1107,156 @@
     textarea.addEventListener('blur', function () { finishText(true); });
     try { textarea.focus({ preventScroll: true }); } catch (error) { textarea.focus(); }
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }
+
+  /* ----------------------------- multiplexing ---------------------------- */
+
+  // A presenter and its viewers are the same page, told apart by the query
+  // string (see MUX above) and joined by the multiplex plugin: slide position is
+  // the plugin's own business, and it carries our ink alongside it, out as a
+  // `send` event on the document and in as a `received` one.
+  //
+  // A stroke is already a list of points in slide coordinates, so nothing needs
+  // translating for a viewer of another size: the model itself travels, and a
+  // viewer is this file with its input coming down a wire.
+
+  var strokeId = 0;    // presenter side: names the stroke being drawn
+  // More than one short stroke can still be inside the playback delay at once.
+  // Keep their clocks and queues separate: a single `incoming` slot made a new
+  // start replace the preceding stroke before its queued end reached a frame,
+  // leaving that mark absent until a later full-state sync or reload.
+  var incoming = {}; // viewer side: stroke id -> { key, stroke, waiting, ... }
+
+  // How long a viewer sits on each packet before drawing it. The wire is quick
+  // on average and uneven packet to packet — Wi-Fi hands over bunches rather
+  // than a steady stream — so points that left the pen evenly spaced arrive in
+  // clumps, and a viewer drawing each one the moment it lands advances the
+  // stroke twice in one frame and not at all in the next. Every point is on
+  // time and the finished stroke is exact; it is only the going that stutters.
+  //
+  // Holding them back turns arrival time into something a viewer no longer has
+  // to care about: each packet carries how far into the stroke it was drawn,
+  // and is drawn again at that offset from a zero fixed once, when the stroke
+  // began — at the speed of the pen, pausing where the pen paused.
+  //
+  // Only the clumps shorter than this are smoothed out; a packet that arrives
+  // already past its offset is drawn at once, having missed its turn. So this
+  // is the trade in full: a viewer is this far behind the pen on top of the
+  // wire, and buys back the unevenness of everything that arrives within it.
+  // Twenty milliseconds is barely over one frame — near enough to live, and it
+  // leaves anything but the smallest jitter to come through as jitter.
+  //
+  // None of which applies to a mirror window on the same device: nothing is on
+  // the wire, so there is no unevenness to smooth out and no reason to be late.
+  // Those strokes are drawn as they land, a frame at a time.
+  var DELAY = 20;
+
+  // Monotonic where it exists: a stroke's offsets are differences taken on one
+  // device, and a clock the OS may step is a poor thing to take them from.
+  function now() {
+    return window.performance && performance.now ? performance.now() : Date.now();
+  }
+
+  // Whole milliseconds since the stroke in hand began, which is all a viewer
+  // needs and all that need go on the wire.
+  function since(stroke) { return Math.round(now() - stroke.t0); }
+
+  // Sent by every end but a viewer, signed in or not: the multiplex plugin puts
+  // it on the relay only when this device is the presenter, and on a channel the
+  // other tabs of this browser can hear always.
+  function send(msg) {
+    if (MUX === 'viewer') return;
+    var e = new CustomEvent('send');
+    e.content = msg;
+    document.dispatchEvent(e);
+  }
+
+  // Everything that is not a stroke in progress — an erase, an undo, a clear, a
+  // width, a load from file, parking the ink — is rare enough to state outright
+  // rather than describe. It doubles as the answer a viewer gets when it joins.
+  function sendAll() {
+    send({ a: 'all', ink: kept(), w: widths, h: hidden });
+  }
+
+  // Whether this window applies what arrives is the transport's business, not
+  // this file's: it is handed the messages meant for it and no others.
+  function receive(msg, local) {
+    if (!msg) return;
+    if (msg.a === 'all') {
+      ink = msg.ink || {};
+      Object.keys(WIDTHS).forEach(function (t) {
+        if (msg.w && msg.w[t] > 0) widths[t] = clampWidth(t, msg.w[t]);
+      });
+      hidden = !!msg.h;
+      undos = {}; redos = {};  // these describe ink that is no longer here
+      incoming = {};           // and neither are the strokes these would extend
+      render();
+    } else if (msg.a === 'start') {
+      var arrival = incoming[msg.i] = {
+        id: msg.i, key: msg.k, stroke: msg.s, tracing: 0,
+        waiting: [], origin: now() + DELAY, immediate: !!local
+      };
+      // The first point waits its turn with the rest, so the stroke starts when
+      // it was started rather than when word of it arrived.
+      arrival.waiting = [ { p: msg.s.p, d: 0 } ];
+      msg.s.p = [];
+      (ink[msg.k] = ink[msg.k] || []).push(msg.s);
+      play(arrival);
+    } else if (incoming[msg.i]) {
+      incoming[msg.i].waiting.push({ p: msg.p, x: msg.x || 0, d: msg.d || 0, last: msg.a === 'end' });
+      play(incoming[msg.i]);
+    }
+  }
+
+  // Draw whatever the delay has now let through — all of it at once, since a
+  // packet another has overtaken need never be drawn on its own — and come back
+  // next frame for as long as anything is still waiting. A packet already past
+  // its offset when it arrives goes straight up: the delay was too short for
+  // that one, and there is nothing to gain by making it later still.
+  function play(arrival) {
+    if (arrival.tracing) return;
+    arrival.tracing = requestAnimationFrame(function () {
+      arrival.tracing = 0;
+      // A full-state sync may have superseded this scheduled frame.
+      if (incoming[arrival.id] !== arrival) return;
+      var due = arrival.immediate ? Infinity : now() - arrival.origin;
+      var drawn = false, last = false;
+      while (arrival.waiting.length && arrival.waiting[0].d <= due) {
+        var packet = arrival.waiting.shift();
+        if (packet.x) arrival.stroke.p.length -= packet.x;
+        if (packet.p && packet.p.length) {
+          for (var n = 0; n < packet.p.length; n++) arrival.stroke.p.push(packet.p[n]);
+        }
+        last = last || !!packet.last;
+        drawn = true;
+      }
+      if (drawn) paint(arrival, !last);
+      if (last) { delete incoming[arrival.id]; return; }
+      if (arrival.waiting.length) play(arrival);
+    });
+  }
+
+  // Once a frame, and not once a packet: the outline is built from the whole
+  // stroke every time, so each packet of a long stroke costs more to draw than
+  // the one before it, and they keep coming at the rate the pen is moving
+  // whether or not the last one has been drawn. A viewer that drew them all
+  // would fall further behind for as long as the pen was down.
+  //
+  // The path is looked up rather than held onto, because a slide change mid
+  // stroke re-renders the layer and makes a different element. Off that slide
+  // there is nothing to show yet; the points keep, and render() puts them up.
+  function paint(arrival, unfinished) {
+    if (arrival.key !== slideKey()) return;
+    // Rebuilt rather than kept when the element under it is not the one it
+    // made: a slide change mid stroke re-renders the layer, and render() has
+    // left a path of its own standing for this stroke.
+    var el = nodes.get(arrival.stroke);
+    if (!arrival.trail || (el && el !== arrival.trail.el)) {
+      arrival.trail = new Trail(arrival.stroke, layers[arrival.stroke.t], el);
+      nodes.set(arrival.stroke, arrival.trail.el);
+    }
+    if (unfinished) arrival.trail.draw();
+    else arrival.trail.close();
   }
 
   /* ------------------------------- drawing ------------------------------- */
@@ -1322,11 +1549,14 @@
     var stroke = { t: tool, c: inkColour(), w: widths[tool], s: !stylus, p: [p] };
     (ink[slideKey()] = ink[slideKey()] || []).push(stroke);
     var trail = new Trail(stroke, layers[tool]);
-    live = { stroke: stroke, trail: trail };
+    live = { stroke: stroke, trail: trail, id: ++strokeId, t0: now() };
     nodes.set(stroke, trail.el);
     armed = false;
     marked = [];
     sync();
+    // A copy: the points are appended to in place as the stroke is drawn.
+    send({ a: 'start', i: live.id, k: slideKey(),
+           s: { t: stroke.t, c: stroke.c, w: stroke.w, s: stroke.s, p: [p] } });
   }
 
   // The crosshair is a mouse's, and it only appears once a mouse has really
@@ -1408,6 +1638,7 @@
     if (!added.added && !added.dropped) return;
     live.trail.draw();
     scribble();
+    send({ a: 'draw', i: live.id, p: added.kept, x: added.dropped, d: since(live) });
   }
 
   /* --------------------------- drawing from touch ------------------------ */
@@ -1506,6 +1737,7 @@
         rub();
       } else {
         live.trail.close();  // one path for the whole stroke, tapered end and all
+        send({ a: 'end', i: live.id, d: since(live) });
         live = null;
         save();
       }
@@ -1574,7 +1806,8 @@
     marked = [];
     render();  // takes the faded paths away along with the strokes they showed
     save();
-  }
+      sendAll();
+}
 
   /* ---------------------------------- UI --------------------------------- */
 
@@ -1660,7 +1893,8 @@
     if (!on) moreOpen = false;
     hidden = false;  // the ink comes back with the tools that made it
     sync();
-  }
+      sendAll();
+}
 
   // Park the ink: the slide as it was written, without the writing on it, for
   // showing the audience the point before the working. Drawing is suspended
@@ -1671,7 +1905,8 @@
     hidden = on;
     if (on) moreOpen = false;
     sync();
-  }
+      sendAll();
+}
 
   // The colour this tool draws in: the swatch's own, except that the first one
   // is a highlighter's yellow while the highlighter is out.
@@ -2066,6 +2301,15 @@
     build();
     render();
     showChrome(chrome);
+
+    // Every window shows what the transport hands it. Every window but a viewer
+    // is also told when one joins, and answers with the ink drawn before it
+    // arrived -- and asks that question itself, now, because the transport
+    // asked it while this file was still waiting for reveal, and an answer
+    // nothing was listening for is an answer lost.
+    document.addEventListener('received', function (e) { receive(e.content, e.local); });
+    if (MUX !== 'viewer') document.addEventListener('welcome', sendAll);
+    document.dispatchEvent(new CustomEvent('rejoin'));
 
     Reveal.on('slidechanged', function () {
       if (editing) finishText(true);
