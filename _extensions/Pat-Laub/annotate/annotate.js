@@ -830,7 +830,7 @@
   // published PDF already has the deck's own typography.
   function overlayPages() {
     return printableSlides().map(function (slide) {
-      var list = ink[slideKey(slide)] || [];
+      var list = ink[slideKeyFor(slide)] || [];
       function shaped(t) {
         return list.filter(function (a) { return a.t === t && !isText(a); })
           .map(function (stroke) { return { colour: stroke.c, path: pathData(stroke) }; });
