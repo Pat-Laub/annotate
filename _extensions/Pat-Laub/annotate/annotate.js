@@ -204,19 +204,13 @@
 
   /* ------------------------------ stroke maths --------------------------- */
 
-  // The nib a stroke was drawn with. Ink saved before strokes carried their own
-  // width falls back to the nib in hand, so an old file still draws.
-  function nib(stroke) {
-    return stroke.w > 0 ? stroke.w : widths[stroke.t];
-  }
-
   // perfect-freehand returns the stroke's outline as a polygon; draw it as a
   // path of quadratic curves through the midpoints, which rounds the corners.
   function pathData(stroke, unfinished) {
     var o = TOOLS[stroke.t];
     if (stroke.s && o.simulated) o = o.simulated;
     var pts = getStroke(stroke.p, {
-      size: nib(stroke) * (o.share || 1),
+      size: stroke.w * (o.share || 1),
       thinning: o.thinning, smoothing: o.smoothing,
       streamline: o.streamline, easing: o.easing,
       simulatePressure: stroke.s, last: !unfinished
@@ -392,7 +386,7 @@
 
   function touches(stroke, x, y) {
     if (isText(stroke)) return AnnotationGeometry.insideBounds([x, y], itemBox(stroke), ERASER);
-    var r = ERASER + nib(stroke) / 2, p = stroke.p;
+    var r = ERASER + stroke.w / 2, p = stroke.p;
     for (var i = 0; i < p.length; i++) {
       if (segDist(x, y, p[i], p[i + 1] || p[i]) <= r) return true;
     }
@@ -651,7 +645,6 @@
     widths[tool] = clampWidth(tool, Math.round(w * 10) / 10);
     try { localStorage.setItem(WIDTH_STORE, JSON.stringify(widths)); } catch (e) { /* full or blocked */ }
     sync();
-    sendAll();  // a width change applies to the viewers' next stroke too
   }
 
   function save() {
@@ -1196,11 +1189,11 @@
     document.dispatchEvent(e);
   }
 
-  // Everything that is not a stroke in progress — an erase, an undo, a clear, a
-  // width, a load from file, parking the ink — is rare enough to state outright
+  // Everything that is not a stroke in progress — an erase, an undo, a clear,
+  // a load from file, parking the ink — is rare enough to state outright
   // rather than describe. It doubles as the answer a viewer gets when it joins.
   function sendAll() {
-    send({ a: 'all', ink: kept(), w: widths, h: hidden });
+    send({ a: 'all', ink: kept(), h: hidden });
   }
 
   // Whether this window applies what arrives is the transport's business, not
@@ -1209,9 +1202,6 @@
     if (!msg) return;
     if (msg.a === 'all') {
       ink = msg.ink || {};
-      Object.keys(WIDTHS).forEach(function (t) {
-        if (msg.w && msg.w[t] > 0) widths[t] = clampWidth(t, msg.w[t]);
-      });
       hidden = !!msg.h;
       undos = {}; redos = {};  // these describe ink that is no longer here
       incoming = {};           // and neither are the strokes these would extend

@@ -21,6 +21,16 @@ test('a stroke is drawn and survives a reload', async ({ page }) => {
   await expect(paths(page)).toHaveCount(1);
 });
 
+test('changing the next-stroke width does not broadcast the whole ink state', async ({ page }) => {
+  await openPad(page);
+  await page.evaluate(() => {
+    window.inkMessages = [];
+    document.addEventListener('send', event => window.inkMessages.push(event.content));
+  });
+  await page.keyboard.press(']');
+  expect(await page.evaluate(() => window.inkMessages)).toEqual([]);
+});
+
 test('undo removes the last stroke', async ({ page }) => {
   const { mod } = require('./support/pad');
   await openPad(page);
