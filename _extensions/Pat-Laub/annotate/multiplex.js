@@ -11,8 +11,9 @@
 window.RevealMultiplex = {
 	id: 'multiplex',
 
-	// The relay on pikachu, behind a Cloudflare tunnel.
-	server: 'https://multiplex.example.com',
+	// Consumers may supply their relay as Reveal's `multiplex.server` setting.
+	// The public extension is otherwise inert rather than assuming a server.
+	server: null,
 
 	init: function ( deck ) {
 		// The speaker view holds two more copies of this deck in iframes of the
@@ -106,7 +107,9 @@ window.RevealMultiplex = {
 		var debug = false;
 		try { debug = !!localStorage.getItem( 'multiplex-debug' ); } catch ( e ) {}
 
-		var server = window.RevealMultiplex.server;
+		var config = deck.getConfig().multiplex || {};
+		var server = config.server || window.RevealMultiplex.server;
+		if ( !server ) return;
 		var socket = io.connect( server, {
 			query: { token: token, role: role },
 			transports: [ 'websocket', 'polling' ]
