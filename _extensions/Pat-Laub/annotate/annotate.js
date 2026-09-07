@@ -1454,8 +1454,8 @@
   // inside the deck — including a link in the middle of a paragraph — is
   // something to draw on, exactly as it was when a box over the slide took the
   // input and covered them all.
-  var CHROME = '.ink-panel, .ink-launchers, .ink-text-editor, .controls, .progress, .slide-number,' +
-    '.slide-menu, .slide-menu-button, .slide-menu-overlay, .speaker-controls';
+  var CHROME = '.ink-panel, .ink-launchers, .ink-text-editor, .controls, .progress,' +
+    '.slide-number, .speaker-controls';
 
   function ours(e) {
     if (!tool) return false;
@@ -2278,8 +2278,6 @@
 
     var launchers = document.createElement('div');
     launchers.className = 'ink-launchers';
-    // Sit clear of the menu plugin's button, which shares this corner.
-    if (document.querySelector('.slide-menu-button')) launchers.classList.add('ink-offset');
     launchers.appendChild(full);
     if (toggle) launchers.appendChild(toggle);
 
