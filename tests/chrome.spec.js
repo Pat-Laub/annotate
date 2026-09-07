@@ -3,33 +3,34 @@ const { openPad, openMore } = require('./support/pad');
 
 // The pad's chrome is drawn in authored page units on a stage that is scaled to
 // the window, so anything sized in `rem`, or in px meant for a browser-sized
-// page, comes out a fraction of everything beside it. Quarto's own hamburger is
-// the usual casualty: it is a separate fixed element it sizes for a browser.
+// page, comes out a fraction of everything beside it.
 
 const spread = xs => Math.max(...xs) - Math.min(...xs);
 
 test('the bottom-left buttons are the same size as each other', async ({ page }) => {
   await openPad(page);
-  const drawn = await page.evaluate(() => {
-    const marks = ['.slide-menu-button i', '.ink-launchers .ink-toggle svg'];
-    return marks.map(sel => {
-      const el = document.querySelector(sel);
-      if (!el) return null;
+  const drawn = await page.evaluate(() =>
+    [...document.querySelectorAll('.ink-launchers .ink-toggle svg')].map(el => {
       const r = el.getBoundingClientRect();
-      return { sel, w: r.width, h: r.height, left: r.left, bottom: r.bottom };
-    });
-  });
-  expect(drawn.every(Boolean), `missing: ${JSON.stringify(drawn)}`).toBe(true);
+      return { w: r.width, h: r.height, left: r.left, bottom: r.bottom };
+    }));
+  expect(drawn.length, 'the corner should hold the full-screen and pen buttons').toBe(2);
 
   // The icons themselves, not the tap targets: a row where one glyph is a
-  // fraction of the other reads as broken however big the boxes are. Width
-  // only, as ACTL2131's equivalent does -- the hamburger's icon is an inline
-  // <i> whose line box is taller than the bars it draws, so its height is not
-  // comparable with an svg's and never was.
+  // fraction of the other reads as broken however big the boxes are.
   expect(spread(drawn.map(d => d.w)), 'the corner icons differ in width').toBeLessThan(12);
+  expect(spread(drawn.map(d => d.h)), 'the corner icons differ in height').toBeLessThan(12);
+  expect(spread(drawn.map(d => d.bottom)), 'the corner icons sit off one another\'s baseline').toBeLessThan(2);
   for (const d of drawn) {
-    expect(d.w, `${d.sel} has no width`).toBeGreaterThan(20);
+    expect(d.w, 'a corner icon has no width').toBeGreaterThan(20);
   }
+});
+
+// Quarto's reveal-menu shared this corner and had to be restyled to fit the
+// stage; slide-stage turns it off, so nothing else lands here.
+test('nothing else shares the bottom-left corner', async ({ page }) => {
+  await openPad(page);
+  await expect(page.locator('.slide-menu-button')).toHaveCount(0);
 });
 
 test('the tool icons are large enough to read', async ({ page }) => {
