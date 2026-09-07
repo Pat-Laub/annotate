@@ -704,6 +704,8 @@
     if (diagnostics.length > DIAGNOSTIC_LIMIT) diagnostics.splice(0, diagnostics.length - DIAGNOSTIC_LIMIT);
   }
 
+  window.AnnotateDiagnostics = diagnosticReport;
+
   function diagnosticReport() {
     return {
       sessionStartedAt: new Date(sessionStarted).toISOString(),
@@ -731,8 +733,8 @@
   // localStorage is this browser on this machine: the ink does not follow the
   // deck to another device, and clearing site data takes it. These two put a
   // whole deck's ink in a file and read one back. The ink remains keyed by
-  // slide so it lands back where it was drawn; exports also wrap a bounded
-  // session trace that can diagnose intermittent input failures.
+  // slide so it lands back where it was drawn. The session input trace stays
+  // out of the file: read it from the console as AnnotateDiagnostics().
   function download() {
     var name = (location.pathname.split('/').pop() || 'slides').replace(/\.html?$/, '');
     var payload = {
@@ -741,8 +743,7 @@
       canvas: { width: W, height: H },
       pages: window.AnnotatePages ? AnnotatePages.count() : Reveal.getTotalSlides(),
       pageIds: window.AnnotatePages ? AnnotatePages.ids() : undefined,
-      ink: kept(),
-      diagnostics: diagnosticReport()
+      ink: kept()
     };
     saveBlob(
       new Blob([JSON.stringify(payload)], { type: 'application/json' }),
