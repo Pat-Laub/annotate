@@ -11,7 +11,10 @@
 window.RevealMultiplex = {
 	id: 'multiplex',
 
-	// Consumers may supply their relay as Reveal's `multiplex.server` setting.
+	// Consumers may supply their relay as Reveal's `multiplexRelay.server`
+	// setting. Not `multiplex`: Quarto reserves that key, and switches its own
+	// bundled multiplex plugin on for any deck that sets it, which then opens a
+	// socket to a public relay of its own.
 	// The public extension is otherwise inert rather than assuming a server.
 	server: null,
 
@@ -116,7 +119,7 @@ window.RevealMultiplex = {
 		var debug = false;
 		try { debug = !!localStorage.getItem( 'multiplex-debug' ); } catch ( e ) {}
 
-		var config = deck.getConfig().multiplex || {};
+		var config = deck.getConfig().multiplexRelay || {};
 		var server = handed.server || config.server || window.RevealMultiplex.server;
 		if ( !server ) return;
 		var socket = io.connect( server, {
