@@ -10,7 +10,7 @@ const spread = xs => Math.max(...xs) - Math.min(...xs);
 test('the bottom-left buttons are the same size as each other', async ({ page }) => {
   await openPad(page);
   const drawn = await page.evaluate(() =>
-    [...document.querySelectorAll('.ink-launchers .ink-toggle svg')].map(el => {
+    [...document.querySelectorAll('.deck-launchers .deck-launcher svg')].map(el => {
       const r = el.getBoundingClientRect();
       return { w: r.width, h: r.height, left: r.left, bottom: r.bottom };
     }));
@@ -79,7 +79,7 @@ test('the options panel is large enough to read', async ({ page }) => {
 // on a projected screen.
 test('C hides and shows the corner buttons', async ({ page }) => {
   await openPad(page);
-  const row = page.locator('.ink-launchers');
+  const row = page.locator('.deck-launchers');
   await expect(row).toBeVisible();
 
   await page.keyboard.press('c');
