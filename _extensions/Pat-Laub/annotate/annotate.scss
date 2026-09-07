@@ -1,7 +1,7 @@
 /*-- scss:defaults --*/
 
 // Styling for annotate.js: the ink layers, the tool panel, and the corner
-// buttons that share reveal's bottom-left row with Quarto's menu. Loaded as a
+// buttons in reveal's bottom-left row. Loaded as a
 // theme layer rather than a plugin stylesheet because it needs the deck's own
 // $mainColor and $link-color.
 //
@@ -423,32 +423,6 @@ $ink-launcher-icon: 120px !default;
   box-shadow: 0 0 0 9px #fff, 0 0 0 15px currentColor;
 }
 
-// The full-screen button continues reveal's bottom-left menu control. Both use
-// the same bottom offset, so their icon boxes share a baseline.
-// Quarto's hamburger is a separate fixed element that it sizes for a browser
-// page, not for this canvas, so on the stage it comes out a fraction of the
-// launchers beside it. Give it the same origin and the same box.
-.reveal .slide-menu-button {
-  position: fixed !important;
-  left: 24px !important;
-  bottom: 24px !important;
-  width: $ink-launcher-size;
-  height: $ink-launcher-size;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  // The bars are not an icon font: Quarto draws them as a background image on
-  // `::before`, boxed at 1rem, so `font-size` leaves them alone and the box has
-  // to be set directly.
-  i.fas::before,
-  i::before {
-    width: $ink-launcher-icon;
-    height: $ink-launcher-icon;
-    background-size: $ink-launcher-icon $ink-launcher-icon;
-  }
-}
-
 .deck-stage > .ink-launchers {
   // In authored page units, like the panel. A rem here would follow the deck's
   // root font size rather than the button's own scale.
@@ -459,12 +433,6 @@ $ink-launcher-icon: 120px !default;
   bottom: 24px;
   z-index: 30;
   display: flex;
-  &.ink-offset {
-    // Continue immediately after reveal's 2.2rem menu button. The two icons
-    // have their own internal whitespace, so a CSS gap here looks much wider
-    // than the gap between the hamburger's bars.
-    left: calc(24px + var(--ink-button));
-  }
 }
 
 .deck-stage .ink-toggle {
@@ -598,12 +566,6 @@ $ink-launcher-icon: 120px !default;
   }
 }
 
-// The scroll view is disabled in annotate.js; drop its menu entry too.
-.slide-menu-item:has(a[onclick*="toggleScrollView"]),
-.slide-tool-item:has(a[onclick*="toggleScrollView"]) {
-  display: none;
-}
-
 // The audience view is on a projector, so it carries no controls at all: the
 // annotation panel and its corner buttons are for the presenting device, and
 // reveal's own arrows and progress bar would only invite someone to click them.
@@ -613,8 +575,7 @@ $ink-launcher-icon: 120px !default;
   .deck-stage > .ink-panel,
   .deck-stage > .ink-launchers,
   .reveal .controls,
-  .reveal .progress,
-  .reveal .slide-menu-button {
+  .reveal .progress {
     display: none !important;
   }
 
@@ -627,16 +588,14 @@ $ink-launcher-icon: 120px !default;
 // a projected one it puts the row -- and the panel and the pointer it opens --
 // back, for when that screen is the only one to hand.
 .ink-chrome-off {
-  .deck-stage > .ink-launchers,
-  .reveal .slide-menu-button {
+  .deck-stage > .ink-launchers {
     display: none !important;
   }
 }
 
 .multiplex-audience.ink-chrome-on {
   .deck-stage > .ink-panel.active,
-  .deck-stage > .ink-launchers,
-  .reveal .slide-menu-button {
+  .deck-stage > .ink-launchers {
     display: flex !important;
   }
 
@@ -660,8 +619,3 @@ $ink-launcher-icon: 120px !default;
   font-family: sans-serif;
 }
 
-// The scroll view is disabled in annotate.js; drop its menu entry too.
-.slide-menu-item:has(a[onclick*="toggleScrollView"]),
-.slide-tool-item:has(a[onclick*="toggleScrollView"]) {
-  display: none;
-}
