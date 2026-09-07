@@ -352,8 +352,8 @@ $ink-launcher-icon: 120px !default;
 
 .deck-stage .ink-more-title {
   padding: 0 15px 12px;
-  color: rgba(0, 0, 0, 0.58);
-  font-size: 36px;
+  color: rgba(0, 0, 0, 0.72);
+  font-size: 48px;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-align: left;
@@ -364,8 +364,12 @@ $ink-launcher-icon: 120px !default;
   align-items: center;
   justify-content: space-between;
 
+  // The SVG scales to its own box, so the width it reports is only as legible
+  // as the box is tall: at the intrinsic 22px it renders a few pixels high on a
+  // fitted deck.
   .ink-nib {
     flex: 1;
+    height: 80px;
   }
 }
 
