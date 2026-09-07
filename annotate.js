@@ -127,16 +127,21 @@
   // watched -- the projector, or a window opened with ?mirror to be shown on
   // one -- and it draws nothing, keeps nothing and sends nothing of its own.
   var MUX = (function () {
-    try {
-      // Per window rather than per device, since both windows of one browser
-      // share the localStorage the role below is kept in.
-      if (new URLSearchParams(location.search).has('mirror')) return 'viewer';
-      var role = localStorage.getItem('multiplex-role');
+    // Per window rather than per device, since both windows of one browser
+    // share the localStorage the role below is kept in.
+    if (new URLSearchParams(location.search).has('mirror')) return 'viewer';
+    // Credentials handed to the page win over the stored pair, exactly as they
+    // do in multiplex.js: the two must agree, or a window follows the relay as
+    // an audience while still keeping and broadcasting ink of its own.
+    var role, handed = window.__multiplex || {};
+    if (handed.role && handed.token) role = handed.role;
+    else try {
       if (!localStorage.getItem('multiplex-token')) return null;
-      return role === 'presenter' ? 'presenter' : role === 'audience' ? 'viewer' : null;
+      role = localStorage.getItem('multiplex-role');
     } catch (e) {
       return null;  // storage blocked: an ordinary deck
     }
+    return role === 'presenter' ? 'presenter' : role === 'audience' ? 'viewer' : null;
   })();
   var PRINT = /(?:^|[?&])print-pdf(?:[=&]|$)/i.test(location.search);
   var PRINT_INK = PRINT && /(?:^|[?&])ink(?:[=&]|$)/i.test(location.search);
@@ -699,6 +704,8 @@
     if (diagnostics.length > DIAGNOSTIC_LIMIT) diagnostics.splice(0, diagnostics.length - DIAGNOSTIC_LIMIT);
   }
 
+  window.AnnotateDiagnostics = diagnosticReport;
+
   function diagnosticReport() {
     return {
       sessionStartedAt: new Date(sessionStarted).toISOString(),
@@ -726,8 +733,8 @@
   // localStorage is this browser on this machine: the ink does not follow the
   // deck to another device, and clearing site data takes it. These two put a
   // whole deck's ink in a file and read one back. The ink remains keyed by
-  // slide so it lands back where it was drawn; exports also wrap a bounded
-  // session trace that can diagnose intermittent input failures.
+  // slide so it lands back where it was drawn. The session input trace stays
+  // out of the file: read it from the console as AnnotateDiagnostics().
   function download() {
     var name = (location.pathname.split('/').pop() || 'slides').replace(/\.html?$/, '');
     var payload = {
@@ -736,8 +743,7 @@
       canvas: { width: W, height: H },
       pages: window.AnnotatePages ? AnnotatePages.count() : Reveal.getTotalSlides(),
       pageIds: window.AnnotatePages ? AnnotatePages.ids() : undefined,
-      ink: kept(),
-      diagnostics: diagnosticReport()
+      ink: kept()
     };
     saveBlob(
       new Blob([JSON.stringify(payload)], { type: 'application/json' }),
