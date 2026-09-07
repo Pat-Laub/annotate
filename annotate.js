@@ -1454,8 +1454,8 @@
   // inside the deck — including a link in the middle of a paragraph — is
   // something to draw on, exactly as it was when a box over the slide took the
   // input and covered them all.
-  var CHROME = '.ink-panel, .ink-launchers, .ink-text-editor, .controls, .progress, .slide-number,' +
-    '.slide-menu, .slide-menu-button, .slide-menu-overlay, .speaker-controls';
+  var CHROME = '.ink-panel, .deck-launchers, .ink-text-editor, .controls, .progress,' +
+    '.slide-number, .speaker-controls';
 
   function ours(e) {
     if (!tool) return false;
@@ -1853,8 +1853,7 @@
     download: '<path d="M12 4v11"/><path d="M8 11.5l4 4 4-4"/><path d="M4.5 19.5h15"/>',
     upload: '<path d="M12 15.5v-11"/><path d="M8 8.5l4-4 4 4"/><path d="M4.5 19.5h15"/>',
     print: '<path d="M7.5 9.5V4.5h9v5"/><path d="M7.5 17.5H5.5A1.5 1.5 0 0 1 4 16v-5A1.5 1.5 0 0 1 5.5 9.5h13A1.5 1.5 0 0 1 20 11v5a1.5 1.5 0 0 1-1.5 1.5h-2"/><path d="M7.5 14h9v5.5h-9z"/>',
-    more: '<circle cx="6" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1" fill="currentColor" stroke="none"/>',
-    fullscreen: '<path d="M4 9V4h5"/><path d="M15 4h5v5"/><path d="M20 15v5h-5"/><path d="M9 20H4v-5"/>'
+    more: '<circle cx="6" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1" fill="currentColor" stroke="none"/>'
   };
 
   function icon(name) {
@@ -1890,21 +1889,6 @@
     if (now - lastWheel < 220) return;
     lastWheel = now;
     cycleColour(e.deltaY > 0 ? 1 : -1);
-  }
-
-  // Expands the element reveal's own F shortcut expands, so the two agree about
-  // what "full screen" means; unlike reveal's, this one also comes back out.
-  function fullscreen() {
-    if (document.fullscreenElement || document.webkitFullscreenElement) {
-      var exit = document.exitFullscreen || document.webkitExitFullscreen;
-      if (exit) exit.call(document);
-      return;
-    }
-    var view = Reveal.getViewportElement();
-    var el = Reveal.getConfig().embedded ? view : view.parentElement;
-    var req = el.requestFullscreen || el.webkitRequestFullscreen ||
-      el.mozRequestFullScreen || el.msRequestFullscreen;
-    if (req) req.call(el);
   }
 
   function open(on) {
@@ -2261,7 +2245,7 @@
     // already in hand, and a button to open them would do nothing.
     if (!toolsOpen) {
       toggle = document.createElement('button');
-      toggle.className = 'ink-toggle ink-pen';
+      toggle.className = 'deck-launcher ink-toggle ink-pen';
       toggle.title = 'Annotate (d), hide the ink (v)';
       toggle.innerHTML = icon('pen');
       toggle.addEventListener('click', function () {
@@ -2270,22 +2254,19 @@
       });
     }
 
-    var full = document.createElement('button');
-    full.className = 'ink-toggle';
-    full.title = 'Full screen (f)';
-    full.innerHTML = icon('fullscreen');
-    full.addEventListener('click', fullscreen);
-
-    var launchers = document.createElement('div');
-    launchers.className = 'ink-launchers';
-    // Sit clear of the menu plugin's button, which shares this corner.
-    if (document.querySelector('.slide-menu-button')) launchers.classList.add('ink-offset');
-    launchers.appendChild(full);
-    if (toggle) launchers.appendChild(toggle);
-
     var parent = document.querySelector('[data-deck-stage]') || Reveal.getRevealElement();
     parent.appendChild(panel);
-    parent.appendChild(launchers);
+    // The stage owns the corner row and the full-screen button in it; the pen
+    // joins that row rather than opening a second one in the same corner.
+    if (toggle) {
+      var launchers = parent.deckLaunchers;
+      if (!launchers) {
+        launchers = document.createElement('div');
+        launchers.className = 'deck-launchers';
+        parent.appendChild(launchers);
+      }
+      launchers.appendChild(toggle);
+    }
 
     panel.addEventListener('click', function (e) {
       var b = e.target.closest('[data-tool],[data-act],[data-colour]');
