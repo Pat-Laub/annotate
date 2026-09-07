@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { openPad } = require('./support/pad');
+const { openPad, openMore } = require('./support/pad');
 
 // The pad's chrome is drawn in authored page units on a stage that is scaled to
 // the window, so anything sized in `rem`, or in px meant for a browser-sized
@@ -45,6 +45,30 @@ test('the tool icons are large enough to read', async ({ page }) => {
     // for the unscaled page comes out at about 7px, which is what this catches.
     expect(icon.w, 'a tool icon is too small to read').toBeGreaterThan(14);
     expect(icon.h, 'a tool icon is too small to read').toBeGreaterThan(14);
+  }
+});
+
+// The options panel is read, not just aimed at: its headings and the width it
+// reports have to survive the same scaling the tool icons do.
+test('the options panel is large enough to read', async ({ page }) => {
+  await openPad(page);
+  await openMore(page);
+  const text = await page.evaluate(() => {
+    const scale = el => {
+      const svg = el.ownerSVGElement;
+      if (!svg) return 1;
+      return svg.getBoundingClientRect().height / svg.viewBox.baseVal.height;
+    };
+    return [...document.querySelectorAll('.ink-more-title, .ink-nib text')].map(el => ({
+      what: el.className.baseVal === undefined ? el.className : 'width readout',
+      size: parseFloat(getComputedStyle(el).fontSize) * scale(el)
+    }));
+  });
+  expect(text.length).toBeGreaterThan(2);
+  for (const item of text) {
+    // Same third-of-the-page scale as the icons above: a heading authored at
+    // 36px, or a readout drawn inside a 22px-tall SVG, lands near 12px and 4px.
+    expect(item.size, `${item.what} is too small to read`).toBeGreaterThan(14);
   }
 });
 
