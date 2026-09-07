@@ -97,18 +97,27 @@ window.RevealMultiplex = {
 
 		/* ----------------------------- the relay ------------------------------ */
 
-		var role, token;
-		try {
-			role = localStorage.getItem( 'multiplex-role' );
-			token = localStorage.getItem( 'multiplex-token' );
-		} catch ( e ) { return; }             // storage blocked: behave as an ordinary deck
+		// The course site hands a staff session its credentials in the page
+		// itself, on `?present` or `?project`: no login page, no 180-day token
+		// sitting in a browser, and nothing to have set up on the right device
+		// beforehand. The localStorage pair is the older path and still works,
+		// which is what keeps the published decks and the login page usable
+		// until the new site is the only way in.
+		var handed = window.__multiplex || {};
+		var role = handed.role, token = handed.token;
+		if ( !role || !token ) {
+			try {
+				role = localStorage.getItem( 'multiplex-role' );
+				token = localStorage.getItem( 'multiplex-token' );
+			} catch ( e ) { return; }         // storage blocked: behave as an ordinary deck
+		}
 		if ( ( role !== 'presenter' && role !== 'audience' ) || !token ) return;
 
 		var debug = false;
 		try { debug = !!localStorage.getItem( 'multiplex-debug' ); } catch ( e ) {}
 
 		var config = deck.getConfig().multiplex || {};
-		var server = config.server || window.RevealMultiplex.server;
+		var server = handed.server || config.server || window.RevealMultiplex.server;
 		if ( !server ) return;
 		var socket = io.connect( server, {
 			query: { token: token, role: role },
