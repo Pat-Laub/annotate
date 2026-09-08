@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { openPad, paths, drawStroke } = require('./support/pad');
+const { openPad, paths, tool, drawStroke } = require('./support/pad');
 
 test('the pad opens ready to draw', async ({ page }) => {
   const failures = [];
@@ -66,4 +66,35 @@ test('the tool panel and corner buttons are on screen', async ({ page }) => {
     expect(box.right, `${name} is off the right edge`).toBeLessThanOrEqual(boxes.viewport.w + 1);
     expect(box.bottom, `${name} is off the bottom edge`).toBeLessThanOrEqual(boxes.viewport.h + 1);
   }
+});
+
+// The ink surface hangs off the stage, which is reveal's parent, so a gesture
+// that lands on it never reaches reveal's swipe listeners on `.reveal`. Once a
+// pencil has been used a finger is a page turn, not ink, and turning the page
+// that way has to keep working with a tool in hand.
+test('a finger swipe turns the page with a tool in hand', async ({ page }) => {
+  await page.goto('/docs/no-pages.html');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  await page.locator('.ink-surface').waitFor();
+  await tool(page, 'pen').click();
+
+  await page.evaluate(() => {
+    const surface = document.querySelector('.ink-surface');
+    const box = surface.getBoundingClientRect();
+    const y = box.top + box.height / 2;
+    const send = (type, at, pointerType, pointerId) => surface.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true, cancelable: true, pointerId, pointerType, isPrimary: true,
+        clientX: box.left + box.width * at, clientY: y
+      }));
+    // A pencil contact first: until one arrives a finger is a drawing tip.
+    send('pointerdown', 0.5, 'pen', 1);
+    send('pointerup', 0.5, 'pen', 1);
+    send('pointerdown', 0.8, 'touch', 2);
+    for (let at = 0.75; at >= 0.3; at -= 0.05) send('pointermove', at, 'touch', 2);
+    send('pointerup', 0.3, 'touch', 2);
+  });
+
+  await expect.poll(() => page.evaluate(() => Reveal.getIndices().h),
+    { message: 'the swipe did not turn the page' }).toBe(1);
 });
