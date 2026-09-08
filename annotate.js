@@ -1725,6 +1725,24 @@
     };
   }
 
+  /* ----------------------- swipes reveal never sees ---------------------- */
+
+  // The surface hangs off the stage, and the stage is reveal's parent, so a
+  // gesture that lands on the surface never reaches the swipe listeners reveal
+  // puts on `.reveal`. A finger the pen has told us not to ink is a page turn:
+  // hand reveal its own copy of the contact so touch navigation keeps working
+  // with a tool in hand.
+  function forwardSwipe(e) {
+    if (!tool || e.pointerType !== 'touch' || !pen) return;
+    if (live || erasing || lasso || moving || resizing || textMoving) return;
+    var target = Reveal.getRevealElement();
+    if (!target || target.contains(surface)) return;
+    target.dispatchEvent(new PointerEvent(e.type, {
+      bubbles: true, pointerId: e.pointerId, pointerType: 'touch',
+      isPrimary: e.isPrimary, clientX: e.clientX, clientY: e.clientY
+    }));
+  }
+
   function finishGesture() {
     activePointer = null;
     var drawn = live || erasing || lasso || moving || resizing || textMoving;
@@ -2107,9 +2125,9 @@
     // navigation reads the same pointer events, so a stroke can be kept from
     // it by stopping propagation (down(), move() and up() do).
     var input = {
-      pointerdown: function (e) { pointers = true; down(e); },
-      pointermove: move,
-      pointerup: up,
+      pointerdown: function (e) { pointers = true; down(e); forwardSwipe(e); },
+      pointermove: function (e) { move(e); forwardSwipe(e); },
+      pointerup: function (e) { up(e); forwardSwipe(e); },
       pointercancel: up,
       touchstart: touchDown,
       touchmove: touchMove,
