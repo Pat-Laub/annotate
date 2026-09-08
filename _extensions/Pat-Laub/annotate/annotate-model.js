@@ -115,8 +115,12 @@
           Math.abs(q[2] - prev[2]) < o.pressure + 0.02) continue;
       if (points.length > 2 &&
           flatEnough(points[points.length - 2], prev, q, o)) {
+        // Taking back a point this same batch had just added: the far end
+        // never saw it, so it is one fewer thing to send rather than one more
+        // to un-send.
+        if (kept.length && kept[kept.length - 1] === points[points.length - 1]) kept.pop();
+        else dropped++;
         points.pop();
-        dropped++;
       }
       points.push(q);
       kept.push(q);
