@@ -78,7 +78,7 @@ test('a finger swipe turns the page with a tool in hand', async ({ page }) => {
   await page.locator('.ink-surface').waitFor();
   await tool(page, 'pen').click();
 
-  await page.evaluate(() => {
+  const forwarded = await page.evaluate(() => {
     const surface = document.querySelector('.ink-surface');
     const box = surface.getBoundingClientRect();
     const y = box.top + box.height / 2;
@@ -87,13 +87,24 @@ test('a finger swipe turns the page with a tool in hand', async ({ page }) => {
         bubbles: true, cancelable: true, pointerId, pointerType, isPrimary: true,
         clientX: box.left + box.width * at, clientY: y
       }));
+    // The copy handed to reveal is dispatched inside the window capture that
+    // made it, so an untagged forward forwards itself: count what arrives.
+    let seen = 0;
+    const reveal = document.querySelector('.reveal');
+    ['pointerdown', 'pointermove', 'pointerup'].forEach(
+      type => reveal.addEventListener(type, () => { seen++; }, false));
+
     // A pencil contact first: until one arrives a finger is a drawing tip.
     send('pointerdown', 0.5, 'pen', 1);
     send('pointerup', 0.5, 'pen', 1);
     send('pointerdown', 0.8, 'touch', 2);
-    for (let at = 0.75; at >= 0.3; at -= 0.05) send('pointermove', at, 'touch', 2);
+    for (let i = 1; i <= 10; i++) send('pointermove', 0.8 - i * 0.05, 'touch', 2);
     send('pointerup', 0.3, 'touch', 2);
+    return seen;
   });
+
+  // One copy per contact: down, ten moves, up.
+  expect(forwarded, 'the forwarded gesture was re-forwarded').toBe(12);
 
   await expect.poll(() => page.evaluate(() => Reveal.getIndices().h),
     { message: 'the swipe did not turn the page' }).toBe(1);
