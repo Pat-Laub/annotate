@@ -153,3 +153,15 @@ test('appending reports the samples it kept, not only how many', () => {
   // What was kept is exactly what the stroke grew by, in order.
   assert.deepEqual(result.kept, p.slice(p.length - result.kept.length));
 });
+
+test('a viewer replaying kept and dropped ends up with the stroke the pen drew', () => {
+  // The wire carries `dropped` (take that many off the end) and `kept` (append
+  // these). Thinning inside one batch can take back a point the same batch had
+  // just added, which was never on the wire to take back.
+  const drawn = [[0, 0, 0.5], [1, 0, 0.5], [2, 0, 0.5]];
+  const viewer = drawn.map((q) => q.slice());
+  const added = appendSamples(drawn, [[3, 0, 0.5], [4, 0, 0.5]], FINE);
+  viewer.length -= added.dropped;
+  added.kept.forEach((q) => viewer.push(q));
+  assert.deepEqual(viewer, drawn);
+});
