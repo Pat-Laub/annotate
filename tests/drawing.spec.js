@@ -98,3 +98,47 @@ test('a finger swipe turns the page with a tool in hand', async ({ page }) => {
   await expect.poll(() => page.evaluate(() => Reveal.getIndices().h),
     { message: 'the swipe did not turn the page' }).toBe(1);
 });
+
+// iPadOS decides for itself what a contact dragging down the page means --
+// scroll it, or leave element fullscreen -- and the only thing that stops it is
+// the touch events being refused. That refusal is what this pins: a pencil
+// drawing a downstroke must have every event of the stream prevented, in a
+// headless browser as on the deck's own hardware.
+//
+// It does not reproduce the iPad gesture itself, which no desktop browser has.
+test('a pencil downstroke refuses the browser its own gesture', async ({ page }) => {
+  await page.goto('/docs/no-pages.html');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  await page.locator('.ink-surface').waitFor();
+  await tool(page, 'pen').click();
+
+  const stream = await page.evaluate(() => {
+    const surface = document.querySelector('.ink-surface');
+    const box = surface.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    // A touch stream built by hand. Desktop WebKit and firefox have no Touch
+    // or TouchEvent constructor -- the engines the iPad runs and the deck is
+    // tested on -- so the fields the plugin actually reads are hung off a
+    // plain Event, which still reports defaultPrevented for real.
+    const send = (type, y, last) => {
+      const touch = { identifier: 7, target: surface, clientX: x, clientY: y,
+                      touchType: 'stylus', force: 0.5 };
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'changedTouches', { value: [touch] });
+      Object.defineProperty(event, 'touches', { value: last ? [] : [touch] });
+      Object.defineProperty(event, 'targetTouches', { value: last ? [] : [touch] });
+      surface.dispatchEvent(event);
+      return { type, prevented: event.defaultPrevented };
+    };
+    // The letter l: straight down the middle of the slide.
+    const top = box.top + box.height * 0.25;
+    const events = [send('touchstart', top, false)];
+    for (let i = 1; i <= 6; i++) events.push(send('touchmove', top + i * box.height * 0.07, false));
+    events.push(send('touchend', top + box.height * 0.42, true));
+    return events;
+  });
+
+  expect(stream.length).toBe(8);
+  const escaped = stream.filter(e => !e.prevented);
+  expect(escaped, `${escaped.map(e => e.type)} reached the browser unrefused`).toEqual([]);
+});
