@@ -1733,14 +1733,19 @@
   // hand reveal its own copy of the contact so touch navigation keeps working
   // with a tool in hand.
   function forwardSwipe(e) {
-    if (!tool || e.pointerType !== 'touch' || !pen) return;
+    // The copy is dispatched on a descendant of the window these handlers
+    // capture on, so it comes straight back here. Untagged, each forward
+    // forwards itself again until the browser's dispatch depth runs out.
+    if (e.inkForwarded || !tool || e.pointerType !== 'touch' || !pen) return;
     if (live || erasing || lasso || moving || resizing || textMoving) return;
     var target = Reveal.getRevealElement();
     if (!target || target.contains(surface)) return;
-    target.dispatchEvent(new PointerEvent(e.type, {
+    var copy = new PointerEvent(e.type, {
       bubbles: true, pointerId: e.pointerId, pointerType: 'touch',
       isPrimary: e.isPrimary, clientX: e.clientX, clientY: e.clientY
-    }));
+    });
+    copy.inkForwarded = true;
+    target.dispatchEvent(copy);
   }
 
   function finishGesture() {
