@@ -149,7 +149,9 @@ $ink-launcher-icon: 120px !default;
   &.ink-overview-highlighter {
     z-index: 12;
     opacity: 0.4;
-    mix-blend-mode: multiply;
+    // No `mix-blend-mode` here, unlike the live layer: blending an element
+    // inside reveal's transformed overview costs a buffer the size of the
+    // whole authored page, per slide, and at this size it does not show.
   }
 
   &.ink-overview-rules {
@@ -265,6 +267,18 @@ $ink-launcher-icon: 120px !default;
 
 .deck-stage .ink-btn,
 .deck-stage .ink-swatch,
+.deck-stage .ink-delay-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 9px;
+
+  .ink-delay {
+    flex: 1;
+    height: 80px;
+  }
+}
+
 .deck-stage .ink-option {
   display: flex;
   align-items: center;
