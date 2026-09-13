@@ -35,6 +35,7 @@ _extensions/Pat-Laub/annotate/
     annotate.js               the tools, the layers and persistence
     annotate-geometry.js      portable, DOM-free geometry
     annotate-model.js         portable pressure, thinning and stroke helpers
+    annotate-codec.js         the packed storage format for saved ink
     annotate-pdf.js           dependency-free vector PDF encoder
     annotate-pages.js         grows and deletes blank pages (opt-in)
     palm-rejection.js         keeps multi-contact palm touches out of reveal swipes
@@ -44,6 +45,38 @@ index.qmd / no-pages.qmd      fixture decks, with page growth on and off
 test/                         DOM-free unit tests (node:test)
 tests/                        Playwright, across chromium, firefox and webkit
 ```
+
+## Saved ink
+
+Ink is kept in `localStorage` under `reveal-ink-v7:<deck path>`, and the panel
+writes the same structure to a file. A stroke is stored packed by
+`annotate-codec.js`: an int32 pair for where it starts, then five bytes a point
+— int16 dx, int16 dy in tenths of a page unit, and a byte of pressure in
+hundredths — base64'd. That is about 8 bytes a point against the 20 the plain
+JSON spent, and it is **exact**: the capture path already rounds x and y to one
+decimal and pressure to two, so nothing is lost.
+
+It has to stay exact. Only storage is packed — the multiplex relay and the
+in-memory strokes carry the same numbers they always did — so any rounding
+introduced here would put an audience's copy of a stroke somewhere other than
+the presenter's.
+
+Packing is what paid for switching the sampling rules off. `step` and `flat` in
+`SAMPLING` existed only to keep saved ink small, and `flat` did real damage
+doing it: it takes back a point the stroke already holds, over and over through
+the gentle curves handwriting is mostly made of, so the kept points stop
+following the pen and the stroke crosses the curve in straight chords bounded
+only by `span` — about 13 screen pixels on an iPad. `pressure` hid it, because
+each rule declines to drop a point whose pressure is doing something; with
+stylus pressure off every point carries a flat 0.5, the guard never fires, and
+the rule discarded 47% of a real page of handwriting. Both are now `0`, every
+sample is kept, and the result still costs less than the thinned JSON did.
+`test/annotate-model.test.js` keeps a `todo` test describing the defect, so it
+is on the record without a permanently failing suite.
+
+Version 6 ink is not read. The version is part of the storage key, so an older
+deck's ink is not found rather than mis-read, and an exported v6 file is
+refused on import.
 
 ## Testing
 
