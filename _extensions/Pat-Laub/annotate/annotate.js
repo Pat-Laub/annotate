@@ -186,6 +186,9 @@
   var held = null;           // the tool the right button borrowed the eraser from
   var armed = false;         // the live stroke has been recognised as a scribble
   var marked = [];           // strokes the eraser or scribble takes when let go
+  // Ink a scribble on *another* window has marked. Held against the strokes
+  // rather than their paths, which a slide change or a redraw replaces.
+  var fading = new WeakSet();
   var selected = [];         // strokes enclosed by the current lasso
   var lasso = null;          // { p, el } while a selection loop is being drawn
   var moving = null;         // original points while selected strokes are dragged
@@ -268,6 +271,7 @@
     this.layer = layer;
     this.base = 0;        // where the tail starts, in the stroke's points
     this.pieces = [];
+    this.faded = false;   // an armed scribble; the pieces still to come fade too
     this.el = pathFor(stroke, true);
     layer.appendChild(this.el);
   }
@@ -276,6 +280,7 @@
     if (this.stroke.p.length - this.base > CHUNK + OVERLAP) {
       var cut = this.base + CHUNK;
       var piece = pathFor(part(this.stroke, this.base, cut + OVERLAP), true);
+      if (this.faded) piece.classList.add('ink-fading');
       this.layer.insertBefore(piece, this.el);
       this.pieces.push(piece);
       this.base = cut;
@@ -292,6 +297,7 @@
   };
 
   Trail.prototype.fade = function () {
+    this.faded = true;
     this.el.classList.add('ink-fading');
     this.pieces.forEach(function (el) { el.classList.add('ink-fading'); });
   };
@@ -370,7 +376,9 @@
   }
 
   function elementFor(annotation, unfinished) {
-    return isText(annotation) ? textFor(annotation) : pathFor(annotation, unfinished);
+    var el = isText(annotation) ? textFor(annotation) : pathFor(annotation, unfinished);
+    if (fading.has(annotation)) el.classList.add('ink-fading');
+    return el;
   }
 
   function updateElement(annotation) {
@@ -1246,6 +1254,19 @@
       msg.s.p = [];
       (ink[msg.k] = ink[msg.k] || []).push(msg.s);
       play(arrival);
+    } else if (msg.a === 'mark') {
+      var here = ink[msg.k] || [];
+      msg.m.forEach(function (i) {
+        if (!here[i]) return;
+        fading.add(here[i]);
+        var el = nodes.get(here[i]);
+        if (el) el.classList.add('ink-fading');
+      });
+      var scribbling = incoming[msg.i];
+      if (scribbling) {
+        fading.add(scribbling.stroke);
+        if (scribbling.trail) scribbling.trail.fade();
+      }
     } else if (incoming[msg.i]) {
       incoming[msg.i].waiting.push({ p: msg.p, x: msg.x || 0, d: msg.d || 0, last: msg.a === 'end' });
       play(incoming[msg.i]);
@@ -1299,6 +1320,7 @@
       arrival.trail = new Trail(arrival.stroke, layers[arrival.stroke.t], el);
       nodes.set(arrival.stroke, arrival.trail.el);
     }
+    if (fading.has(arrival.stroke)) arrival.trail.fade();
     if (unfinished) arrival.trail.draw();
     else arrival.trail.close();
   }
@@ -1832,13 +1854,21 @@
   // given back — scribble on across more ink and it joins them. What faded is
   // what goes.
   function scribble() {
+    var fresh = [];
     scribbleTargets(live.stroke).forEach(function (s) {
       if (marked.indexOf(s) !== -1) return;
       marked.push(s);
+      fresh.push(strokes().indexOf(s));
       var el = nodes.get(s);
       if (el) el.classList.add('ink-fading');
     });
-    if (!marked.length || armed) return;
+    if (!marked.length) return;
+    // A viewer is drawing the same stroke from the same points, in the same
+    // order, so the ink it is about to lose can be named by position. Without
+    // this the ink simply vanishes there while the presenter has watched it
+    // fade for a second first.
+    if (fresh.length) send({ a: 'mark', i: live.id, k: slideKey(), m: fresh });
+    if (armed) return;
     armed = true;
     live.trail.fade();
     sync();
