@@ -61,18 +61,23 @@ in-memory strokes carry the same numbers they always did — so any rounding
 introduced here would put an audience's copy of a stroke somewhere other than
 the presenter's.
 
-Packing is what paid for switching the sampling rules off. `step` and `flat` in
-`SAMPLING` existed only to keep saved ink small, and `flat` did real damage
-doing it: it takes back a point the stroke already holds, over and over through
-the gentle curves handwriting is mostly made of, so the kept points stop
-following the pen and the stroke crosses the curve in straight chords bounded
-only by `span` — about 13 screen pixels on an iPad. `pressure` hid it, because
-each rule declines to drop a point whose pressure is doing something; with
-stylus pressure off every point carries a flat 0.5, the guard never fires, and
-the rule discarded 47% of a real page of handwriting. Both are now `0`, every
-sample is kept, and the result still costs less than the thinned JSON did.
-`test/annotate-model.test.js` keeps a `todo` test describing the defect, so it
-is on the record without a permanently failing suite.
+Packing is what paid for switching `flat` off. It existed only to keep saved
+ink small, and it did real damage doing it: it takes back a point the stroke
+already holds, over and over through the gentle curves handwriting is mostly
+made of, so the kept points stop following the pen and the stroke crosses the
+curve in straight chords bounded only by `span` — about 13 screen pixels on an
+iPad. `pressure` hid it, because each rule declines to drop a point whose
+pressure is doing something; with stylus pressure off every point carries a flat
+0.5, the guard never fires, and the rule discarded 47% of a real page of
+handwriting. It is now `0`, and `test/annotate-model.test.js` keeps a `todo`
+test describing the defect, so it is on the record without a permanently
+failing suite.
+
+`step` stays on. Unlike `flat` it only ever skips an incoming sample, never
+takes back one already kept, so it cannot chord, and on a real page of
+handwriting it is invisible. It is also what keeps a heavily annotated lecture
+inside the few megabytes an origin gets: about 0.5 MB against 1.8 MB for the
+same ink with nothing dropped.
 
 Version 6 ink is not read. The version is part of the storage key, so an older
 deck's ink is not found rather than mis-read, and an exported v6 file is
