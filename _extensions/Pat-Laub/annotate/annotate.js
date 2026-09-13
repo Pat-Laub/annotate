@@ -209,6 +209,7 @@
   var sessionStarted = Date.now();
   var diagnostics = [];      // bounded, session-only input trace; exported with ink
   var W, H, slides, surface, panel, picker, toggle, guide, rulesPath, selectionLayer, selectionBox, saveTimer;
+  var storageFull = false;   // the last save hit the origin's quota
 
   /* ------------------------------ stroke maths --------------------------- */
 
@@ -659,13 +660,28 @@
     sync();
   }
 
+  // A full store and a blocked one throw the same way and mean different
+  // things: the first stops keeping ink that is still on screen, so it has to
+  // be said out loud; the second was never going to keep it, and saying so on
+  // every save is noise.
+  function isFull(e) {
+    return !!e && (e.name === 'QuotaExceededError' ||
+      e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22);
+  }
+
   function save() {
     if (MUX === 'viewer') return;  // the presenter's ink is not this browser's to keep
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
+      var full = false;
       try {
         localStorage.setItem(STORE, JSON.stringify(AnnotationCodec.packInk(kept())));
-      } catch (e) { /* full or blocked */ }
+      } catch (e) {
+        full = isFull(e);
+      }
+      if (full === storageFull) return;
+      storageFull = full;
+      sync();
     }, 400);
   }
 
@@ -2071,6 +2087,7 @@
     act('pressure').classList.toggle('active', pressureEnabled);
     act('more').classList.toggle('active', moreOpen);
     act('more').setAttribute('aria-expanded', moreOpen ? 'true' : 'false');
+    panel.querySelector('.ink-warning').hidden = !storageFull;
     panel.querySelector('.ink-more').hidden = !moreOpen || !on;
     panel.querySelector('.ink-selection-actions').hidden =
       tool !== 'select' || moreOpen || (!selected.length && !clipboard);
@@ -2230,6 +2247,8 @@
         button('data-act', 'paste', 'Paste copied ink (⌘V)') +
         button('data-act', 'delete', 'Delete selection (Delete)', 'clear') +
       '</div>' +
+      '<div class="ink-warning" role="status" hidden>Storage full &mdash; ink is no ' +
+        'longer being saved. Export it from the more menu.</div>' +
       '<div class="ink-more" role="group" aria-label="Annotation options" hidden>' +
         '<div class="ink-more-title">Stroke width</div>' +
         '<div class="ink-width-row">' +
