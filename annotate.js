@@ -151,6 +151,13 @@
   var RULE_STORE = 'reveal-ink-rules';
   var RULE_SPACING_STORE = 'reveal-ink-rule-spacing';
   var PRESSURE_STORE = 'reveal-ink-pressure';
+  var DELAY_STORE = 'reveal-ink-multiplex-delay';
+
+  // How long a viewer holds each packet of a stroke before drawing it, in
+  // milliseconds, and the settings the more menu offers. See the multiplexing
+  // section for what the wait buys.
+  var DELAY = 20;
+  var DELAYS = [ 0, 10, 20, 40, 80 ];
   var DIAGNOSTIC_LIMIT = 12000;
   // Centre ordinary light Pencil writing near perfect-freehand's neutral 0.5
   // width, while retaining useful room on either side for pressure variation.
@@ -178,6 +185,7 @@
   var ruled = readRules();    // local view preference; never part of shared ink
   var ruleSpacing = readRuleSpacing(); // browser-local guide density
   var pressureEnabled = readPressure(); // captured into each new stroke's points
+  var playDelay = readDelay();  // presenter's choice; viewers are told it
   var colour = COLOURS[0][1];
   var moreOpen = false;       // session controls expand beside the writing rail
   var lastWheel = 0;          // one colour step per physical wheel gesture
@@ -197,7 +205,8 @@
   var editing = null;        // in-place textarea and its uncommitted text-box draft
   var clipboard = null;      // copied strokes survive slide changes for this session
   var nodes = new WeakMap(); // annotation -> its SVG element
-  var thinned = new WeakMap();// stroke -> its simplified points
+  var thinned = new WeakMap();         // stroke -> its simplified points
+  var overviewPoints = new WeakMap();  // the same, thinned for a preview cell
   var layers = {};           // one SVG per rendered annotation type; see build()
   var view;                  // every layer's viewBox, in slide coordinates
   // On an iPad this deck assumes an Apple Pencil is available, so fingers are
@@ -218,6 +227,13 @@
 
   // perfect-freehand returns the stroke's outline as a polygon; draw it as a
   // path of quadratic curves through the midpoints, which rounds the corners.
+  // A coordinate is written to the nearest tenth of a page unit, which on the
+  // stage's 3744-unit page is a fraction of a device pixel. Left alone these
+  // come out of perfect-freehand as full doubles, and a page of handwriting is
+  // then a megabyte of digits nobody can see -- which the overview, holding a
+  // copy of every page at once, pays for all at once.
+  function round(n) { return Math.round(n * 10) / 10; }
+
   function pathData(stroke, unfinished) {
     var o = TOOLS[stroke.t];
     if (stroke.s && o.simulated) o = o.simulated;
@@ -228,10 +244,10 @@
       simulatePressure: stroke.s, last: !unfinished
     });
     if (!pts.length) return '';
-    var d = ['M', pts[0][0], pts[0][1], 'Q'];
+    var d = ['M', round(pts[0][0]), round(pts[0][1]), 'Q'];
     for (var i = 0; i < pts.length; i++) {
       var a = pts[i], b = pts[(i + 1) % pts.length];
-      d.push(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+      d.push(round(a[0]), round(a[1]), round((a[0] + b[0]) / 2), round((a[1] + b[1]) / 2));
     }
     return d.join(' ') + ' Z';
   }
@@ -621,6 +637,22 @@
     var saved;
     try { saved = localStorage.getItem(PRESSURE_STORE); } catch (e) { /* blocked */ }
     return saved === null || saved === undefined ? PRESSURE.enabledByDefault : saved === 'true';
+  }
+
+  function readDelay() {
+    var saved;
+    try { saved = parseFloat(localStorage.getItem(DELAY_STORE)); } catch (e) { /* blocked */ }
+    return DELAYS.indexOf(saved) >= 0 ? saved : DELAY;
+  }
+
+  // The presenter's own windows keep the choice; a viewer is told it and does
+  // not write it down, so it goes back to following whoever presents next.
+  function stepDelay(longer) {
+    var at = DELAYS.indexOf(playDelay);
+    playDelay = DELAYS[Math.min(DELAYS.length - 1, Math.max(0, at + (longer ? 1 : -1)))];
+    try { localStorage.setItem(DELAY_STORE, playDelay); } catch (e) { /* full or blocked */ }
+    send({ a: 'delay', d: playDelay });
+    sync();
   }
 
   function togglePressure() {
@@ -1199,12 +1231,15 @@
   // is the trade in full: a viewer is this far behind the pen on top of the
   // wire, and buys back the unevenness of everything that arrives within it.
   // Twenty milliseconds is barely over one frame — near enough to live, and it
-  // leaves anything but the smallest jitter to come through as jitter.
+  // leaves anything but the smallest jitter to come through as jitter. How much
+  // of the trade is worth making depends on the wire, so the more menu offers a
+  // few settings either side of it, zero included: the delay is the viewer's
+  // behaviour but the presenter's choice, and travels to viewers like the ink.
   //
   // None of which applies to a mirror window on the same device: nothing is on
   // the wire, so there is no unevenness to smooth out and no reason to be late.
   // Those strokes are drawn as they land, a frame at a time.
-  var DELAY = 20;
+  // The settings are DELAYS, up with the other constants.
 
   // Monotonic where it exists: a stroke's offsets are differences taken on one
   // device, and a clock the OS may step is a poor thing to take them from.
@@ -1230,7 +1265,7 @@
   // a load from file, parking the ink — is rare enough to state outright
   // rather than describe. It doubles as the answer a viewer gets when it joins.
   function sendAll() {
-    send({ a: 'all', ink: kept(), h: hidden });
+    send({ a: 'all', ink: kept(), h: hidden, d: playDelay });
   }
 
   // Whether this window applies what arrives is the transport's business, not
@@ -1240,13 +1275,16 @@
     if (msg.a === 'all') {
       ink = msg.ink || {};
       hidden = !!msg.h;
+      if (!local && DELAYS.indexOf(msg.d) >= 0) playDelay = msg.d;
       undos = {}; redos = {};  // these describe ink that is no longer here
       incoming = {};           // and neither are the strokes these would extend
       render();
+    } else if (msg.a === 'delay') {
+      if (!local && DELAYS.indexOf(msg.d) >= 0) { playDelay = msg.d; sync(); }
     } else if (msg.a === 'start') {
       var arrival = incoming[msg.i] = {
         id: msg.i, key: msg.k, stroke: msg.s, tracing: 0,
-        waiting: [], origin: now() + DELAY, immediate: !!local
+        waiting: [], origin: now() + playDelay, immediate: !!local
       };
       // The first point waits its turn with the rest, so the stroke starts when
       // it was started rather than when word of it arrived.
@@ -2027,11 +2065,36 @@
     document.querySelectorAll('.ink-overview-layer').forEach(function (el) { el.remove(); });
   }
 
+  // Where the authored page goes while overview is open. A stage publishes the
+  // card it maps the page onto; without one the section *is* the page.
+  function overviewBox() {
+    var stage = document.querySelector('[data-deck-stage]');
+    if (!stage) return { left: '0', top: '0', width: '100%', height: '100%' };
+    var css = getComputedStyle(stage);
+    var edges = ['left', 'top', 'width', 'height'].map(function (edge) {
+      return css.getPropertyValue('--deck-overview-card-' + edge).trim();
+    });
+    if (edges.some(function (value) { return !value; })) {
+      return { left: '0', top: '0', width: '100%', height: '100%' };
+    }
+    return { left: edges[0], top: edges[1], width: edges[2], height: edges[3] };
+  }
+
+  // The geometry goes on the element itself, not in the stylesheet. These layers
+  // are children of a slide section, and a deck's theme styles those children:
+  // slide-stage shrinks them to its overview card, which took the layers out of
+  // absolute positioning. In flow they added their own height to the slide, and
+  // reveal centres a slide on the content it measures, so the heading was
+  // pushed up out of its card and the ink landed nowhere near the page it was
+  // drawn on. An inline style is the one thing a stylesheet cannot take back.
   function overviewLayer(slide, className) {
     var el = document.createElementNS(SVG_NS, 'svg');
+    var box = overviewBox();
     el.setAttribute('class', 'ink-overview-layer ' + className);
     el.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     el.setAttribute('aria-hidden', 'true');
+    el.style.cssText = 'position:absolute;zoom:1;left:' + box.left + ';top:' + box.top +
+      ';width:' + box.width + ';height:' + box.height;
     slide.appendChild(el);
     return el;
   }
@@ -2040,6 +2103,18 @@
   // of each slide's own ink inside its section so reveal's overview transform
   // scales it along with the page. The live layers stay hidden there because
   // they represent only one slide and would otherwise float over the grid.
+  // A cell in the grid is a few hundred pixels wide, so the copy in it is
+  // drawn from a stroke thinned to what that cell can show. A page of
+  // handwriting is megabytes of outline at full detail, and the grid holds one
+  // copy of every page at once: an iPad runs out of memory over it.
+  var PREVIEW_TOLERANCE = 300;   // page widths per unit of simplification
+
+  function preview(stroke) {
+    var p = overviewPoints.get(stroke);
+    if (!p) overviewPoints.set(stroke, p = simplify(stroke.p, W / PREVIEW_TOLERANCE));
+    return { t: stroke.t, c: stroke.c, w: stroke.w, s: stroke.s, p: p };
+  }
+
   function renderOverview() {
     clearOverview();
     if (!window.Reveal || !Reveal.isOverview || !Reveal.isOverview()) return;
@@ -2055,7 +2130,7 @@
         var drawn = list.filter(function (stroke) { return stroke.t === t; });
         if (!drawn.length) return;
         var layer = overviewLayer(slide, 'ink-overview-' + t);
-        drawn.forEach(function (stroke) { layer.appendChild(pathFor(stroke)); });
+        drawn.forEach(function (stroke) { layer.appendChild(pathFor(preview(stroke))); });
       });
       var text = list.filter(isText);
       if (text.length) {
@@ -2115,6 +2190,11 @@
       'M8 ' + (11 - gap) + 'H44 M8 11H44 M8 ' + (11 + gap) + 'H44');
     rulePreview.setAttribute('aria-label', 'Rule spacing: ' + ruleSpacing + ' slide units');
     act('pressure').classList.toggle('active', pressureEnabled);
+    // A viewer is told the delay rather than choosing it, and shows it greyed.
+    var mine = MUX !== 'viewer';
+    panel.querySelector('.ink-delay text').textContent = playDelay + ' ms';
+    act('delay-less').disabled = !mine || playDelay <= DELAYS[0];
+    act('delay-more').disabled = !mine || playDelay >= DELAYS[DELAYS.length - 1];
     act('more').classList.toggle('active', moreOpen);
     act('more').setAttribute('aria-expanded', moreOpen ? 'true' : 'false');
     panel.querySelector('.ink-warning').hidden = !storageFull;
@@ -2300,6 +2380,14 @@
           button('data-act', 'rules-farther', 'Move ruled lines farther apart', 'thicker') +
         '</div>' +
         option('data-act', 'pressure', 'Pencil pressure', 'Apple Pencil pressure changes stroke width') +
+        '<div class="ink-more-title ink-rule-title">Replay delay</div>' +
+        '<div class="ink-delay-row">' +
+          button('data-act', 'delay-less', 'Shorter replay delay for viewers', 'thinner') +
+          '<svg class="ink-delay" width="52" height="22" viewBox="0 0 52 22" fill="currentColor" ' +
+          'opacity="0.65"><title>How long a viewer holds each packet before drawing it</title>' +
+          '<text x="26" y="16" text-anchor="middle" font-size="13"></text></svg>' +
+          button('data-act', 'delay-more', 'Longer replay delay for viewers', 'thicker') +
+        '</div>' +
         '<hr>' +
         option('data-act', 'clear', 'Clear this slide', 'Clear this slide (⇧ for the whole deck)') +
         option('data-act', 'delete-page', 'Delete this page') +
@@ -2383,6 +2471,8 @@
         toggleRules();
       } else if (b.dataset.act === 'rules-closer' || b.dataset.act === 'rules-farther') {
         resizeRules(b.dataset.act === 'rules-farther');
+      } else if (b.dataset.act === 'delay-less' || b.dataset.act === 'delay-more') {
+        stepDelay(b.dataset.act === 'delay-more');
       } else if (b.dataset.act === 'pressure') {
         togglePressure();
       } else if (b.dataset.act === 'more') {
