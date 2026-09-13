@@ -91,3 +91,26 @@ test('ruled writing guides can be toggled', async ({ page }) => {
   expect(after.active, 'the guides button did not change state').not.toBe(before.active);
   expect(after.hidden, 'the guide layer did not follow the button').toBe(!after.active);
 });
+
+// The selection layer's own box has to match the ink layers', or everything
+// drawn in slide coordinates -- the lasso, the selection box, the handles --
+// renders scaled and offset from the pointer that drew it.
+test('the lasso is drawn under the pointer that draws it', async ({ page }) => {
+  await openPad(page);
+  await drawStroke(page, [[0.35, 0.45], [0.45, 0.5], [0.55, 0.45]]);
+
+  await tool(page, 'select').click();
+  await drag(page, [[0.28, 0.36], [0.62, 0.36], [0.62, 0.60], [0.28, 0.60], [0.28, 0.36]]);
+  await expect(page.locator('.ink-selection-box')).toBeVisible();
+
+  const { box, stroke } = await page.evaluate(() => ({
+    box: document.querySelector('.ink-selection-box').getBoundingClientRect().toJSON(),
+    stroke: document.querySelector('svg.ink-pen path').getBoundingClientRect().toJSON()
+  }));
+  // The box hugs the stroke it encircles, so the two rectangles sit on top of
+  // one another on screen.
+  expect(Math.abs(box.x - stroke.x), 'the selection box is not over the stroke').toBeLessThan(40);
+  expect(Math.abs(box.y - stroke.y), 'the selection box is not over the stroke').toBeLessThan(40);
+  expect(box.width / stroke.width).toBeGreaterThan(0.7);
+  expect(box.width / stroke.width).toBeLessThan(1.4);
+});
