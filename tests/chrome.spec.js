@@ -14,7 +14,8 @@ test('the bottom-left buttons are the same size as each other', async ({ page })
       const r = el.getBoundingClientRect();
       return { w: r.width, h: r.height, left: r.left, bottom: r.bottom };
     }));
-  expect(drawn.length, 'the corner should hold the full-screen and pen buttons').toBe(2);
+  // Full-screen, overview and the pen: the first two are slide-stage's.
+  expect(drawn.length, 'the corner should hold the full-screen, overview and pen buttons').toBe(3);
 
   // The icons themselves, not the tap targets: a row where one glyph is a
   // fraction of the other reads as broken however big the boxes are.
