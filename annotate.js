@@ -115,7 +115,10 @@
     tolerance: 2    // simplification tolerance; ink is sampled far finer than needed
   };
   var SVG_NS = 'http://www.w3.org/2000/svg';
-  var STORE = 'reveal-ink:' + location.pathname;
+  // The format version is in the key, so ink written by an older build is not
+  // read rather than mis-read. v6 stored the points as plain JSON; v7 packs
+  // them (annotate-codec.js) and keeps every sample instead of thinning.
+  var STORE = 'reveal-ink-v7:' + location.pathname;
 
   // Which end of a multiplexed deck this is. The role is stored per device by a sign-in
   // page and read from the same localStorage keys the
@@ -579,7 +582,11 @@
   }
 
   function read() {
-    try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { return {}; }
+    try {
+      return AnnotationCodec.unpackInk(JSON.parse(localStorage.getItem(STORE)) || {});
+    } catch (e) {
+      return {};
+    }
   }
 
   function readWidths() {
@@ -657,7 +664,7 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
       try {
-        localStorage.setItem(STORE, JSON.stringify(kept()));
+        localStorage.setItem(STORE, JSON.stringify(AnnotationCodec.packInk(kept())));
       } catch (e) { /* full or blocked */ }
     }, 400);
   }
@@ -739,11 +746,11 @@
     var name = (location.pathname.split('/').pop() || 'slides').replace(/\.html?$/, '');
     var payload = {
       format: 'scribble-ink',
-      version: 6,
+      version: AnnotationCodec.VERSION,
       canvas: { width: W, height: H },
       pages: window.AnnotatePages ? AnnotatePages.count() : Reveal.getTotalSlides(),
       pageIds: window.AnnotatePages ? AnnotatePages.ids() : undefined,
-      ink: kept()
+      ink: AnnotationCodec.packInk(kept())
     };
     saveBlob(
       new Blob([JSON.stringify(payload)], { type: 'application/json' }),
@@ -756,12 +763,12 @@
     reader.onload = function () {
       var data;
       try { data = JSON.parse(reader.result); } catch (e) { return; }
-      if (!data || data.format !== 'scribble-ink' || data.version !== 6 ||
+      if (!data || data.format !== 'scribble-ink' || data.version !== AnnotationCodec.VERSION ||
           !data.ink || typeof data.ink !== 'object') {
         alert('This annotation file uses an unsupported format.');
         return;
       }
-      ink = data.ink;
+      ink = AnnotationCodec.unpackInk(data.ink);
       if (window.AnnotatePages) {
         if (Array.isArray(data.pageIds)) AnnotatePages.ensureIds(data.pageIds);
         AnnotatePages.ensureForKeys(Object.keys(ink));

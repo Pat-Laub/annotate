@@ -17,6 +17,7 @@ contributes:
         - perfect-freehand.min.js
         - annotate-geometry.js
         - annotate-model.js
+        - annotate-codec.js
         - annotate-pdf.js
         - annotate.js
         - annotate-pages.js
