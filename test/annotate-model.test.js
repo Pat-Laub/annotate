@@ -92,6 +92,59 @@ test('a coalesced batch that repeats the previous one adds nothing', () => {
   assert.deepEqual(p, [[0, 0, 0.5], [4, 0, 0.5], [8, 0, 0.5]]);
 });
 
+// What the defaults actually do to handwriting. The two tests above and below
+// drive appendSamples with explicit thresholds to exercise the mechanism; these
+// two drive it with SAMPLING as shipped, which is what a deck runs.
+
+test('the shipped thresholds carry handwriting without chording across it', () => {
+  // A gently curving run sampled as densely as a stylus samples. Every triple
+  // along it is nearly collinear at this spacing, which is exactly the case the
+  // `flat` rule used to take points back on: it would pop the point behind the
+  // tip again and again, so the kept points stopped following the pen and the
+  // stroke crossed the curve in straight chords of up to `span` page units.
+  const p = [[0, 0, 0.5]];
+  for (let i = 1; i <= 400; i++) {
+    const t = i / 400;
+    appendSamples(p, [[+(t * 300).toFixed(1), +(Math.sin(t * Math.PI) * 40).toFixed(1), 0.5]]);
+  }
+  let longest = 0;
+  for (let i = 1; i < p.length; i++) {
+    longest = Math.max(longest, Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
+  }
+  assert.ok(longest < 5, `longest chord was ${longest.toFixed(1)} page units`);
+});
+
+test('the shipped thresholds still refuse a repeated coalesced batch', () => {
+  const p = [[0, 0, 0.5]];
+  appendSamples(p, [[3, 1, 0.5], [6, 2, 0.5]]);
+  const again = appendSamples(p, [[3, 1, 0.5], [6, 2, 0.5]]);
+  assert.equal(again.added, 0);
+  assert.equal(p.length, 3);
+});
+
+// Why `flat` is off rather than merely tuned down, kept as a todo so the defect
+// stays on the record without a permanently red suite: `node --test` runs this,
+// reports it under `todo`, and does not fail on it. Turn `flat` back on and this
+// is what you get back. Delete it only along with flatEnough itself.
+//
+// Handed a gently curving run -- most of handwriting -- the rule takes back the
+// point behind the tip on sample after sample, so the kept points stop
+// following the pen and the stroke crosses the curve in straight chords bounded
+// only by `span`. Lowering `flat` changes the frequency, never the chord.
+test('KNOWN DEFECT: `flat` chords across a gentle curve, up to `span`', { todo: 'flat is disabled; see SAMPLING in annotate-model.js' }, () => {
+  const WITH_FLAT = { repeat: 32, step: 0, flat: 0.45, span: 36, pressure: 0.03 };
+  const p = [[0, 0, 0.5]];
+  for (let i = 1; i <= 400; i++) {
+    const t = i / 400;
+    appendSamples(p, [[+(t * 300).toFixed(1), +(Math.sin(t * Math.PI) * 40).toFixed(1), 0.5]], WITH_FLAT);
+  }
+  let longest = 0;
+  for (let i = 1; i < p.length; i++) {
+    longest = Math.max(longest, Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
+  }
+  assert.ok(longest < 5, `longest chord was ${longest.toFixed(1)} page units, close to span`);
+});
+
 // The thresholds below are the test's own, not the module's defaults: those are
 // distances in page units and change with the authored page, and a fixture tied
 // to them would have to be rescaled every time the page did.
