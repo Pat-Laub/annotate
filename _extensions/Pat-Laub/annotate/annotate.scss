@@ -478,7 +478,10 @@ $ink-launcher-icon: 120px !default;
     display: none !important;
   }
 }
-.reveal.overview {
+// The layers hang off the stage, which is an *ancestor* of `.reveal`, so a
+// `.reveal.overview` descendant rule never reaches them.
+.reveal.overview,
+.deck-stage:has(.reveal.overview) {
   .ink-panel,
   .deck-launchers,
   .ink-guide,
