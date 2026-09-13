@@ -265,8 +265,6 @@ $ink-launcher-icon: 120px !default;
   }
 }
 
-.deck-stage .ink-btn,
-.deck-stage .ink-swatch,
 .deck-stage .ink-delay-row {
   display: flex;
   align-items: center;
@@ -279,6 +277,8 @@ $ink-launcher-icon: 120px !default;
   }
 }
 
+.deck-stage .ink-btn,
+.deck-stage .ink-swatch,
 .deck-stage .ink-option {
   display: flex;
   align-items: center;
