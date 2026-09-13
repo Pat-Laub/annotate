@@ -72,39 +72,41 @@
   //     line between them, over no more than `span`, and carrying no change of
   //     pressure. If they do it goes.
   //
-  // `step` and `flat` are off. Both existed only to keep the saved ink small,
-  // and the packed v7 encoding (annotate-codec.js) does that far better: every
-  // sample now costs about 7 bytes against the 19.5 the old JSON spent on a
-  // thinned one, so keeping all of them is cheaper than keeping some of them
-  // used to be. They are not needed for drawing either -- Trail in annotate.js
+  // `flat` is off. It existed only to keep the saved ink small, and it did real
+  // damage doing it: it takes back a point the stroke already holds, and it can
+  // do that on sample after sample, so through the gentle curves that most of
+  // handwriting is made of the kept points stop following the pen and the
+  // stroke crosses the curve in straight chords of up to `span`. On an iPad
+  // that is about 13 screen pixels of ruled line through the middle of a
+  // letter, which is visible and ugly at the widths mathematics is written at.
+  // Lowering `flat` changes how often it happens, never how long the chords
+  // are, because `span` alone bounds those. `pressure` hid it: each rule
+  // declines to drop a point whose pressure is doing something, so with stylus
+  // pressure ON the runs were constantly interrupted and the damage was mild.
+  // With pressure off every point carries a flat 0.5, the guard can never fire,
+  // and the rule ran unopposed -- it discarded 47% of a real page of
+  // handwriting on its own. `test/annotate-model.test.js` holds a todo test
+  // that still describes it. The mechanism is kept, and `appendSamples` still
+  // honours whatever thresholds it is handed, because the unit tests drive them
+  // directly and a caller may want them.
+  //
+  // `step` stays on. It only ever skips an incoming sample, never takes back
+  // one the stroke already holds, so it cannot chord; on a real page of
+  // handwriting it is invisible, and it is what keeps a heavily written lecture
+  // inside the few megabytes an origin gets in localStorage -- roughly 0.5 MB
+  // against 1.8 MB for the same ink with nothing dropped at all.
+  //
+  // What made keeping the rest affordable is the packed v7 encoding
+  // (annotate-codec.js), which spends about 8 bytes on a point where the old
+  // JSON spent 20. Neither rule is needed for drawing: Trail in annotate.js
   // rebuilds only the tail, capped at CHUNK + OVERLAP points, so the cost of a
   // frame does not grow with the stroke.
   //
-  // `flat` in particular was actively destructive, and the disabling is not a
-  // matter of taste. It takes back a point the stroke already holds, and it can
-  // do that on sample after sample, so through the gentle curves that most of
-  // handwriting is made of the kept points stop following the pen: the stroke
-  // crosses the curve in straight chords of up to `span`. On an iPad that is
-  // about 13 screen pixels of ruled line through the middle of a letter, which
-  // is visible and ugly at the widths you write mathematics at. Lowering `flat`
-  // changes how often it happens, never how long the chords are, because `span`
-  // alone bounds those. `pressure` hid it: each rule declines to drop a point
-  // whose pressure is doing something, so with stylus pressure ON the runs were
-  // constantly interrupted and the damage was mild. With pressure off every
-  // point carries a flat 0.5, the guard can never fire, and the rule ran
-  // unopposed -- it discarded 47% of a real page of handwriting on its own.
-  // `test/annotate-model.test.js` holds a todo test that still describes it.
-  //
-  // The mechanism is kept, and `appendSamples` still honours whatever
-  // thresholds it is handed, because the two are worth having under a caller
-  // that wants them and the unit tests drive them directly.
-  //
-  // `step`, `flat` and `span` are distances in the page's own units, so were
-  // they ever turned back on they would have to track the authored page: the
-  // values below are for the 3744-unit page the stage draws, three times the
-  // 1248-unit page they were first tuned against. `pressure` is a pressure
-  // difference and `repeat` a count, so neither scales.
-  var SAMPLING = { repeat: 32, step: 0, flat: 0, span: 36, pressure: 0.03 };
+  // `step`, `flat` and `span` are distances in the page's own units, so they
+  // track the authored page: these are for the 3744-unit page the stage draws,
+  // three times the 1248-unit page they were first tuned against. `pressure` is
+  // a pressure difference and `repeat` a count, so neither scales.
+  var SAMPLING = { repeat: 32, step: 1.5, flat: 0, span: 36, pressure: 0.03 };
 
   function seenRecently(points, q, repeat) {
     for (var i = Math.max(0, points.length - repeat); i < points.length; i++) {
