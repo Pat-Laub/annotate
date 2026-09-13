@@ -73,11 +73,19 @@ handwriting. It is now `0`, and `test/annotate-model.test.js` keeps a `todo`
 test describing the defect, so it is on the record without a permanently
 failing suite.
 
-`step` stays on. Unlike `flat` it only ever skips an incoming sample, never
-takes back one already kept, so it cannot chord, and on a real page of
-handwriting it is invisible. It is also what keeps a heavily annotated lecture
-inside the few megabytes an origin gets: about 0.5 MB against 1.8 MB for the
-same ink with nothing dropped.
+`step` is off too, for a different reason. It is not destructive the way `flat`
+is — it only skips an incoming sample, never takes back a kept one — but it is
+an economy, and the economy has been paid for twice: packing spends about 8
+bytes on a point where the JSON spent 20, and saved ink only has to outlive one
+lecture. A deck is written on, exported, and done with; localStorage is the
+buffer between those two moments rather than an archive. A heavily annotated
+lecture is about 1.8 MB packed with nothing dropped at all, which leaves room
+inside the few megabytes an origin gets.
+
+Note that a failed save is currently silent — `annotate.js` swallows the quota
+exception — so if that headroom is ever exhausted the ink stops being written
+without saying so. Export is the durable path; the relay keeps nothing, and the
+recorder in a consuming project is a separate opt-in service.
 
 Version 6 ink is not read. The version is part of the storage key, so an older
 deck's ink is not found rather than mis-read, and an exported v6 file is
