@@ -2065,11 +2065,36 @@
     document.querySelectorAll('.ink-overview-layer').forEach(function (el) { el.remove(); });
   }
 
+  // Where the authored page goes while overview is open. A stage publishes the
+  // card it maps the page onto; without one the section *is* the page.
+  function overviewBox() {
+    var stage = document.querySelector('[data-deck-stage]');
+    if (!stage) return { left: '0', top: '0', width: '100%', height: '100%' };
+    var css = getComputedStyle(stage);
+    var edges = ['left', 'top', 'width', 'height'].map(function (edge) {
+      return css.getPropertyValue('--deck-overview-card-' + edge).trim();
+    });
+    if (edges.some(function (value) { return !value; })) {
+      return { left: '0', top: '0', width: '100%', height: '100%' };
+    }
+    return { left: edges[0], top: edges[1], width: edges[2], height: edges[3] };
+  }
+
+  // The geometry goes on the element itself, not in the stylesheet. These layers
+  // are children of a slide section, and a deck's theme styles those children:
+  // slide-stage shrinks them to its overview card, which took the layers out of
+  // absolute positioning. In flow they added their own height to the slide, and
+  // reveal centres a slide on the content it measures, so the heading was
+  // pushed up out of its card and the ink landed nowhere near the page it was
+  // drawn on. An inline style is the one thing a stylesheet cannot take back.
   function overviewLayer(slide, className) {
     var el = document.createElementNS(SVG_NS, 'svg');
+    var box = overviewBox();
     el.setAttribute('class', 'ink-overview-layer ' + className);
     el.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     el.setAttribute('aria-hidden', 'true');
+    el.style.cssText = 'position:absolute;zoom:1;left:' + box.left + ';top:' + box.top +
+      ';width:' + box.width + ';height:' + box.height;
     slide.appendChild(el);
     return el;
   }
