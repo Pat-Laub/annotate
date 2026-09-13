@@ -21,6 +21,29 @@ test('a stroke is drawn and survives a reload', async ({ page }) => {
   await expect(paths(page)).toHaveCount(1);
 });
 
+// The reload above proves the ink comes back; this proves it was written down
+// in the packed form rather than as plain JSON. Nothing else fails if the
+// packing silently stops happening -- the ink still round-trips, just several
+// times larger -- and staying small is the whole reason every sample is kept.
+test('ink is stored packed, not as plain JSON points', async ({ page }) => {
+  await openPad(page);
+  await drawStroke(page);
+  await page.waitForTimeout(600);   // the debounced save
+
+  const stored = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find(k => k.startsWith('reveal-ink-v7:'));
+    return key ? JSON.parse(localStorage.getItem(key)) : null;
+  });
+  expect(stored, 'nothing was saved under a v7 key').not.toBeNull();
+
+  const strokes = Object.values(stored).flat();
+  expect(strokes.length).toBeGreaterThan(0);
+  for (const stroke of strokes) {
+    expect(typeof stroke.b, 'a stroke was not packed').toBe('string');
+    expect(stroke.p, 'a packed stroke still carries plain points').toBeUndefined();
+  }
+});
+
 test('changing the next-stroke width does not broadcast the whole ink state', async ({ page }) => {
   await openPad(page);
   await page.evaluate(() => {
