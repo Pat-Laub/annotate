@@ -125,6 +125,24 @@
     '<path d="M9 20H4v-5"/></svg>';
   full.addEventListener('click', fullscreenStage);
   launchers.appendChild(full);
+  // An iPad has no Esc and no O. Overview is the only way to move more than a
+  // slide at a time, so it gets a button in the row a finger already uses --
+  // and one that stays put inside the grid, since tapping a card to leave also
+  // changes slide.
+  var grid = document.createElement('button');
+  grid.className = 'deck-launcher deck-launcher-overview';
+  grid.title = 'Slide overview (esc)';
+  grid.setAttribute('aria-label', 'Slide overview');
+  grid.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="3" y="3" width="7" height="7" rx="1"/>' +
+    '<rect x="14" y="3" width="7" height="7" rx="1"/>' +
+    '<rect x="3" y="14" width="7" height="7" rx="1"/>' +
+    '<rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
+  grid.addEventListener('click', function () {
+    if (window.Reveal && Reveal.toggleOverview) Reveal.toggleOverview();
+  });
+  launchers.appendChild(grid);
   stage.appendChild(launchers);
   stage.deckLaunchers = launchers;
 

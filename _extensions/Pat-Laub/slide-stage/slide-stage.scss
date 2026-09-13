@@ -190,6 +190,17 @@ $ov-card-height: 1765.125px;   // exactly 16:9, i.e. the page scaled by $ov-scal
 // overview gives us, so its offsets are the page's own insets scaled down.
 $ov-card-left: -$content-left * $ov-scale;
 $ov-card-top: -$content-top * $ov-scale;
+
+// The card is where the authored page goes while overview is open, so anything
+// drawn in page coordinates over a slide -- annotate's ink previews -- has to
+// be told about it: a section is the content frame, which is a different box.
+// Published on the stage next to --deck-width, in slide units.
+.deck-stage {
+  --deck-overview-card-left: #{$ov-card-left};
+  --deck-overview-card-top: #{$ov-card-top};
+  --deck-overview-card-width: #{$ov-card-width};
+  --deck-overview-card-height: #{$ov-card-height};
+}
 $ov-rail: $rail-width * $ov-scale;
 $ov-rail-left: ($deck-width - $content-left - $rail-width) * $ov-scale;
 $ov-content-width: $content-width * $ov-scale;
@@ -227,12 +238,17 @@ $ov-content-width: $content-width * $ov-scale;
   top: #{$ov-card-top} !important;
   height: #{$ov-card-height} !important;
 }
+// The ring is an `outline`, not a `box-shadow`: a card is the authored page at
+// 3138 x 1765 slide units and a lecture deck lays 80 of them out at once, which
+// is a shadow buffer per card at that size and more than an iPad will give. It
+// killed Safari's web process 1.5-3.5s into overview on an 82-slide deck, and
+// the same deck was steady once these were outlines.
 .reveal.overview .slides section:not(.stack)::before {
   z-index: 0;
   left: #{$ov-card-left} !important;
   width: #{$ov-card-width} !important;
   background: $body-bg;
-  box-shadow: 0 0 0 3px rgba($mainColor, 0.18);
+  outline: 3px solid rgba($mainColor, 0.18);
 }
 // The title pentagon, mapped from its inset on the page onto the card: 48px in
 // on three sides and clear of the rail on the fourth, all scaled by $ov-scale.
@@ -250,10 +266,10 @@ $ov-content-width: $content-width * $ov-scale;
   background: $stage-rail-background !important;
 }
 .reveal.overview .slides section:not(.stack):hover::before {
-  box-shadow: 0 0 0 10px rgba($mainColor, 0.35);
+  outline: 10px solid rgba($mainColor, 0.35);
 }
 .reveal.overview .slides section:not(.stack).present::before {
-  box-shadow: 0 0 0 10px $link-color;
+  outline: 10px solid $link-color;
 }
 // The card is the page scaled by $ov-scale, so the content must shrink by the
 // same factor to sit where it does on the page. `zoom` rather than a transform:
@@ -562,8 +578,13 @@ html.reveal-print {
 
 // Presentation controls, not content: keep them out of the printed deck and out
 // of the overview grid, where one row would sit over a whole grid of slides.
-.print-pdf .deck-launchers,
-.reveal.overview ~ .deck-launchers,
-.deck-stage-overview > .deck-launchers {
+.print-pdf .deck-launchers {
+  display: none !important;
+}
+
+// Overview covers the page with a grid of slides, so the row stands down there
+// -- all but the button that opened it, which is the way back out that does not
+// also change slide.
+.deck-stage-overview > .deck-launchers > .deck-launcher:not(.deck-launcher-overview) {
   display: none !important;
 }
