@@ -1155,6 +1155,7 @@
     }
     render();
     save();
+    sendAll();
   }
 
   function editText(point) {
@@ -1483,6 +1484,7 @@
     showSelection();
     sync();
     save();
+    sendAll();
   }
 
   function nextSlide(create) {
@@ -1522,6 +1524,7 @@
     });
     render();
     save();
+    sendAll();
   }
 
   // The modifier reveal's zoom plugin magnifies on (ctrl on Linux, otherwise
@@ -1846,14 +1849,16 @@
       moving = null;
       showSelection();
       save();
+      sendAll();
     } else if (resizing) {
       resizing = null;
       showSelection();
       save();
+      sendAll();
     } else if (textMoving) {
       var textSession = textMoving;
       textMoving = null;
-      if (textSession.moved) save();
+      if (textSession.moved) { save(); sendAll(); }
       else editText(textSession.start);
       sync();
     } else if (erasing) {
