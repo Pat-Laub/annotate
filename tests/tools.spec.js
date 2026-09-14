@@ -151,3 +151,15 @@ test('a deck without page growth hides the page delete', async ({ page }) => {
   await expect(act(page, 'delete-page')).toBeHidden();
   await expect(act(page, 'clear-deck')).toBeVisible();
 });
+
+// option() has no icon fallback the way button() does, so a name missing from
+// ICONS interpolates `undefined` into the markup and the label reads
+// "undefinedDownload annotated PDF".
+test('every menu option draws an icon', async ({ page }) => {
+  await openPad(page);
+  await openMore(page);
+  const bad = await page.$$eval('.ink-more .ink-option', options => options
+    .filter(o => !o.querySelector('svg path') || o.textContent.includes('undefined'))
+    .map(o => o.dataset.act));
+  expect(bad, 'these options have no icon').toEqual([]);
+});
