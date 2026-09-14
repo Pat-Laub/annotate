@@ -114,3 +114,40 @@ test('the lasso is drawn under the pointer that draws it', async ({ page }) => {
   expect(box.width / stroke.width).toBeGreaterThan(0.7);
   expect(box.width / stroke.width).toBeLessThan(1.4);
 });
+
+// A lecture deck is driven with an Apple Pencil and no keyboard, so the
+// deck-wide clear needs a menu entry of its own rather than ⇧-clicking the
+// slide one. The page delete goes the other way: it only works where the pages
+// plugin is on, so a deck without it should not show the entry at all.
+async function openFixedDeck(page) {
+  await page.goto('/docs/no-pages.html');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  await page.locator('.ink-surface').waitFor();
+}
+
+test('clear this deck takes the ink off every slide', async ({ page }) => {
+  await openFixedDeck(page);
+  await drawStroke(page, [[0.3, 0.45], [0.5, 0.5]]);
+  await expect(paths(page)).toHaveCount(1);
+
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => page.evaluate(() => Reveal.getIndices().h)).toBe(1);
+  await drawStroke(page, [[0.3, 0.45], [0.5, 0.5]]);
+  await expect(paths(page)).toHaveCount(1);
+
+  page.on('dialog', dialog => dialog.accept());
+  await openMore(page);
+  await act(page, 'clear-deck').click();
+  await expect(paths(page)).toHaveCount(0);
+
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => page.evaluate(() => Reveal.getIndices().h)).toBe(0);
+  await expect(paths(page), 'the first slide kept its ink').toHaveCount(0);
+});
+
+test('a deck without page growth hides the page delete', async ({ page }) => {
+  await openFixedDeck(page);
+  await openMore(page);
+  await expect(act(page, 'delete-page')).toBeHidden();
+  await expect(act(page, 'clear-deck')).toBeVisible();
+});
