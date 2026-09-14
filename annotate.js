@@ -2403,6 +2403,7 @@
         option('data-act', 'clear', 'Clear this slide', 'Clear this slide (⇧ for the whole deck)') +
         option('data-act', 'clear-deck', 'Clear this deck', 'Clear the annotations on every slide') +
         option('data-act', 'delete-page', 'Delete this page') +
+        '<hr>' +
         option('data-act', 'pdf', 'Download annotated PDF') +
         option('data-act', 'download', 'Export annotations') +
         option('data-act', 'upload', 'Import annotations') +
@@ -2512,6 +2513,10 @@
     build();
     render();
     var opts = (Reveal.getConfig && Reveal.getConfig().annotate) || {};
+    // Re-read rather than assign: what the deck sets is the default, and both
+    // readers prefer a value this browser has already stored.
+    if (opts.penWidth > 0) { WIDTHS.pen = opts.penWidth; widths = readWidths(); }
+    if (DELAYS.indexOf(opts.delay) >= 0) { DELAY = opts.delay; playDelay = readDelay(); }
     toolsOpen = opts.tools === 'open';
     if (toolsOpen && !tool) open(true);
     showChrome(chrome);
