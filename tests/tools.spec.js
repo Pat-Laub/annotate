@@ -163,3 +163,14 @@ test('every menu option draws an icon', async ({ page }) => {
     .map(o => o.dataset.act));
   expect(bad, 'these options have no icon').toEqual([]);
 });
+
+// A lecture deck sets its own nib and replay delay in _quarto.yml; the fixture
+// carries the same two options ACTL2131 does. Both are only defaults: a width
+// or delay already stored from a previous session still wins.
+test('a deck can set the starting nib width and replay delay', async ({ page }) => {
+  await openFixedDeck(page);
+  await tool(page, 'pen').click();
+  await expect(page.locator('.ink-nib text')).toHaveText('5.0');
+  await openMore(page);
+  await expect(page.locator('.ink-delay text')).toHaveText('0 ms');
+});
