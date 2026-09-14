@@ -443,6 +443,10 @@ $ink-launcher-icon: 120px !default;
   cursor: default;
 }
 
+.deck-stage .ink-option[hidden] {
+  display: none;
+}
+
 // Each swatch shows its colour as a dot; the button's `color` is set inline by
 // annotate.js, so the dot and its selection ring both just use currentColor.
 .deck-stage .ink-swatch::before {

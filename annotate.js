@@ -1967,6 +1967,7 @@
     undo: '<path d="M4.5 9.5h10a4.5 4.5 0 0 1 0 9H9"/><path d="M8 5.5l-4 4 4 4"/>',
     redo: '<path d="M19.5 9.5h-10a4.5 4.5 0 0 0 0 9H15"/><path d="M16 5.5l4 4-4 4"/>',
     clear: '<path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 12.5h9L17.5 7"/>',
+    'clear-deck': '<path d="M3 6h10"/><path d="M6.5 6V4h3v2"/><path d="M4.5 6l.8 9h5.4l.8-9"/><path d="M15 9h6v11h-6z"/><path d="M15 13h6"/>',
     'delete-page': '<path d="M5 7h14"/><path d="M9 7V4.5h6V7"/><path d="M7 7l1 12h8l1-12"/><path d="M10 10.5v5M14 10.5v5"/>',
     rules: '<path d="M4 6h16M4 12h16M4 18h16"/>',
     download: '<path d="M12 4v11"/><path d="M8 11.5l4 4 4-4"/><path d="M4.5 19.5h15"/>',
@@ -2181,6 +2182,10 @@
     act('undo').disabled = !(undos[key] || []).length;
     act('redo').disabled = !(redos[key] || []).length;
     act('clear').disabled = !strokes().length;
+    act('clear-deck').disabled = !Object.keys(ink).some(function (k) { return ink[k].length; });
+    // Only the pad can delete a page; a lecture deck has nothing to delete, so
+    // the entry goes rather than sitting there greyed out for good.
+    act('delete-page').hidden = !window.AnnotatePages || !AnnotatePages.count();
     act('delete-page').disabled = !window.AnnotatePages || !AnnotatePages.canRemove();
     act('copy').disabled = !selected.length;
     act('paste').disabled = !clipboard || !clipboard.strokes.length;
@@ -2395,6 +2400,7 @@
         '</div>' +
         '<hr>' +
         option('data-act', 'clear', 'Clear this slide', 'Clear this slide (⇧ for the whole deck)') +
+        option('data-act', 'clear-deck', 'Clear this deck', 'Clear the annotations on every slide') +
         option('data-act', 'delete-page', 'Delete this page') +
         option('data-act', 'pdf', 'Download annotated PDF') +
         option('data-act', 'download', 'Export annotations') +
@@ -2470,6 +2476,8 @@
         deleteSelection();
       } else if (b.dataset.act === 'clear') {
         clear(e.shiftKey);
+      } else if (b.dataset.act === 'clear-deck') {
+        clear(true);
       } else if (b.dataset.act === 'delete-page') {
         deletePage();
       } else if (b.dataset.act === 'rules') {
