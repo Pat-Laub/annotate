@@ -4,6 +4,8 @@ format:
   slide-stage-revealjs:
     annotate:
       pages: false
+      penWidth: 5
+      delay: 0
 ---
 
 ## A fixed deck {#fixed-one}
