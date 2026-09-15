@@ -282,14 +282,17 @@
     return { t: stroke.t, c: stroke.c, w: stroke.w, s: stroke.s, p: stroke.p.slice(from, to) };
   }
 
-  function Trail(stroke, layer) {
+  // `adopt` is the path render() has already put down for this stroke: a
+  // render mid-stroke replaces the layer's children, so drawing into a fresh
+  // element of our own would leave that one standing beside it.
+  function Trail(stroke, layer, adopt) {
     this.stroke = stroke;
     this.layer = layer;
     this.base = 0;        // where the tail starts, in the stroke's points
     this.pieces = [];
     this.faded = false;   // an armed scribble; the pieces still to come fade too
-    this.el = pathFor(stroke, true);
-    layer.appendChild(this.el);
+    this.el = adopt || pathFor(stroke, true);
+    if (!adopt) layer.appendChild(this.el);
   }
 
   Trail.prototype.draw = function () {
