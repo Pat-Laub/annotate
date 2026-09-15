@@ -1262,10 +1262,15 @@
   }
 
   // Everything that is not a stroke in progress — an erase, an undo, a clear,
-  // a load from file, parking the ink — is rare enough to state outright
-  // rather than describe. It doubles as the answer a viewer gets when it joins.
+  // a load from file — is rare enough to state outright rather than describe.
+  // It doubles as the answer a viewer gets when it joins, which is a whole
+  // lecture's ink: packed, the same way it is written to localStorage, since a
+  // point costs about 7 bytes that way against 19.5 as JSON. Round-tripping is
+  // exact for anything a pen drew; a stroke that has been moved or resized can
+  // land a twentieth of a page unit away, which is the precision localStorage
+  // has always given the presenter's own reload.
   function sendAll() {
-    send({ a: 'all', ink: kept(), d: playDelay });
+    send({ a: 'all', ink: AnnotationCodec.packInk(kept()), d: playDelay });
   }
 
   // Whether this window applies what arrives is the transport's business, not
@@ -1273,7 +1278,7 @@
   function receive(msg, local) {
     if (!msg) return;
     if (msg.a === 'all') {
-      ink = msg.ink || {};
+      ink = AnnotationCodec.unpackInk(msg.ink || {});
       if (!local && DELAYS.indexOf(msg.d) >= 0) playDelay = msg.d;
       undos = {}; redos = {};  // these describe ink that is no longer here
       incoming = {};           // and neither are the strokes these would extend
