@@ -215,6 +215,7 @@
   var pen = AnnotationModel.isIPad(navigator);
   var stylus = false;        // the stroke in hand has a pressure of its own
   var pointers = false;      // pointer events arrive here, so touches are ignored
+  var pointerId = null;      // the contact the last pointerdown was for
   var touching = null;       // identifier of the touch a stroke is being drawn with
   var activePointer = null;  // only this contact may move or finish the live gesture
   var hovers = 0;            // consecutive hovering mouse moves; see hover()
@@ -1755,15 +1756,21 @@
   // the chalkboard plugin this replaced drew from touches — and an Apple
   // Pencil on an iPad is what this whole tool is for.
   //
-  // Only ever one of the two paths runs. Pointer events for a gesture are
-  // dispatched before its touch events, so the first pointerdown to arrive
-  // switches this off for the rest of the session; where pointer events work,
-  // these handlers never do anything.
+  // Only ever one of the two paths runs for a contact. Pointer events for a
+  // gesture are dispatched before its touch events, under the touch's own
+  // identifier, so a touch whose pointerdown has just been through down() --
+  // by id, or because the gesture it began is still in hand -- is left alone.
+  // The first pointerdown of the session switches fingers off for good; a
+  // stylus stays on, because iPadOS does not always send a pencil's pointer
+  // events -- while it is cancelling a palm beside it, for one -- and its
+  // touch events are then the only record of the stroke.
   function touchDown(e) {
-    if (pointers || touching !== null) return;
+    if (touching !== null || activePointer !== null) return;
     var t = e.changedTouches[0];
-    if (t.touchType === 'stylus') pen = true;
-    if (pen && t.touchType !== 'stylus') return;  // a palm, or a swipe
+    var stylus = t.touchType === 'stylus';
+    if (pointers && (!stylus || t.identifier === pointerId)) return;
+    if (stylus) pen = true;
+    if (pen && !stylus) return;  // a palm, or a swipe
     touching = t.identifier;
     down(asPointer(e, t));
   }
@@ -2275,7 +2282,7 @@
     // navigation reads the same pointer events, so a stroke can be kept from
     // it by stopping propagation (down(), move() and up() do).
     var input = {
-      pointerdown: function (e) { pointers = true; down(e); forwardSwipe(e); },
+      pointerdown: function (e) { pointers = true; pointerId = e.pointerId; down(e); forwardSwipe(e); },
       pointermove: function (e) { move(e); forwardSwipe(e); },
       pointerup: function (e) { up(e); forwardSwipe(e); },
       pointercancel: up,
