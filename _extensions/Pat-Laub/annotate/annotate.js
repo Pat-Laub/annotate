@@ -1776,12 +1776,12 @@
   }
 
   function touchMove(e) {
-    var t = pointers ? null : sameTouch(e);
+    var t = sameTouch(e);
     if (t) move(asPointer(e, t));
   }
 
   function touchUp(e) {
-    var t = pointers ? null : sameTouch(e);
+    var t = sameTouch(e);
     if (!t) return;
     touching = null;
     up(asPointer(e, t));
