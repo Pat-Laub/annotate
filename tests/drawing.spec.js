@@ -176,3 +176,78 @@ test('a pencil downstroke refuses the browser its own gesture', async ({ page })
   const escaped = stream.filter(e => !e.prevented);
   expect(escaped, `${escaped.map(e => e.type)} reached the browser unrefused`).toEqual([]);
 });
+
+// Pointer events for a contact are dispatched before its touch events, so the
+// first `pointerdown` of a session used to switch the touch path off for good.
+// That assumed every later contact would get a `pointerdown` too. A pencil
+// contact that arrives as `touchstart [stylus]` and nothing else -- iPadOS
+// while it is cancelling a palm beside it, for one -- then went nowhere: no
+// stroke, no diagnostics entry with `handled`, nothing on the wire. The touch
+// path has to stay open for a stylus contact no pointer event has claimed.
+async function stylusTouches(page, identifier, from, to) {
+  return page.evaluate(({ identifier, from, to }) => {
+    const surface = document.querySelector('.ink-surface');
+    const box = surface.getBoundingClientRect();
+    const at = f => [box.left + box.width * f[0], box.top + box.height * f[1]];
+    const send = (type, [x, y], last) => {
+      const touch = { identifier, target: surface, clientX: x, clientY: y,
+                      touchType: 'stylus', force: 0.5 };
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'changedTouches', { value: [touch] });
+      Object.defineProperty(event, 'touches', { value: last ? [] : [touch] });
+      Object.defineProperty(event, 'targetTouches', { value: last ? [] : [touch] });
+      surface.dispatchEvent(event);
+    };
+    send('touchstart', at(from), false);
+    for (let i = 1; i <= 6; i++) {
+      send('touchmove', at([from[0] + (to[0] - from[0]) * i / 6,
+                            from[1] + (to[1] - from[1]) * i / 6]), false);
+    }
+    send('touchend', at(to), true);
+  }, { identifier, from, to });
+}
+
+async function penPointer(page, pointerId, from, to) {
+  return page.evaluate(({ pointerId, from, to }) => {
+    const surface = document.querySelector('.ink-surface');
+    const box = surface.getBoundingClientRect();
+    const send = (type, f) => surface.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, pointerId, pointerType: 'pen', isPrimary: true,
+      pressure: type === 'pointerup' ? 0 : 0.4,
+      clientX: box.left + box.width * f[0], clientY: box.top + box.height * f[1]
+    }));
+    send('pointerdown', from);
+    for (let i = 1; i <= 6; i++) {
+      send('pointermove', [from[0] + (to[0] - from[0]) * i / 6,
+                           from[1] + (to[1] - from[1]) * i / 6]);
+    }
+    send('pointerup', to);
+  }, { pointerId, from, to });
+}
+
+test('a stylus contact that arrives only as touch events still draws', async ({ page }) => {
+  await page.goto('/docs/no-pages.html');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  await page.locator('.ink-surface').waitFor();
+  await tool(page, 'pen').click();
+
+  await penPointer(page, 41, [0.2, 0.4], [0.4, 0.4]);
+  await expect(paths(page)).toHaveCount(1);
+
+  await stylusTouches(page, 42, [0.2, 0.6], [0.4, 0.6]);
+  await expect(paths(page)).toHaveCount(2);
+});
+
+// The same contact reported both ways -- pointer events, then its touch events
+// with the same id, which is what WebKit does for every pencil stroke -- is
+// one stroke, not two.
+test('a stylus contact reported as pointer and touch events draws once', async ({ page }) => {
+  await page.goto('/docs/no-pages.html');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  await page.locator('.ink-surface').waitFor();
+  await tool(page, 'pen').click();
+
+  await penPointer(page, 43, [0.2, 0.4], [0.4, 0.4]);
+  await stylusTouches(page, 43, [0.2, 0.4], [0.4, 0.4]);
+  await expect(paths(page)).toHaveCount(1);
+});
