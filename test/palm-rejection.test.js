@@ -32,3 +32,43 @@ test('pen and mouse pointers do not count as palm contacts', () => {
   assert.equal(block('pointerdown', event(2, 'touch')), false);
   assert.equal(block('pointermove', event(2, 'touch')), false);
 });
+
+// A palm contact does not always report that it lifted. iPadOS can take a
+// contact away without a `pointerup` -- a system gesture claiming it, the app
+// suspending mid-touch, or the contact simply being lost -- and the id then
+// stays in the guard's active set with nothing left to remove it. Because
+// rejection is only lifted when that set empties, every later one-finger swipe
+// arrives to find a contact already down, re-arms the quarantine, and is
+// blocked. Observed in a lecture on 15 Sep 2026: three swipes in a row reached
+// reveal with no movement at all and were cancelled, the fourth got through.
+test('a contact that never lifts must not block every later swipe', () => {
+  const block = createGuard();
+
+  // A palm lands alongside the finger and the gesture is quarantined: correct.
+  assert.equal(block('pointerdown', event(1)), false);
+  assert.equal(block('pointerdown', event(2)), true);
+
+  // The finger lifts. The palm never does.
+  assert.equal(block('pointerup', event(2)), true);
+
+  // A clean one-finger swipe afterwards is a genuine gesture and has to reach
+  // reveal, or the deck stops changing slides until the page is reloaded.
+  assert.equal(block('pointerdown', event(3)), false);
+  assert.equal(block('pointermove', event(3)), false);
+  assert.equal(block('pointerup', event(3)), false);
+});
+
+test('a cancelled contact is gone, whether or not others are still down', () => {
+  const block = createGuard();
+
+  // Two contacts, then one is cancelled rather than lifted. A cancel is the
+  // platform saying the contact is finished, so it should not leave the guard
+  // holding a contact that can never be cleared.
+  assert.equal(block('pointerdown', event(1)), false);
+  assert.equal(block('pointerdown', event(2)), true);
+  assert.equal(block('pointercancel', event(1)), true);
+  assert.equal(block('pointercancel', event(2)), true);
+
+  assert.equal(block('pointerdown', event(3)), false);
+  assert.equal(block('pointermove', event(3)), false);
+});
