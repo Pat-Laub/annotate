@@ -2303,7 +2303,7 @@
         // refuses them on the canvas it hands an Apple Pencil. Non-passive, or
         // the browser is free to ignore the refusal.
         if (type.indexOf('touch') === 0 && e.cancelable) e.preventDefault();
-        input[type](e);
+        try { input[type](e); } catch (err) { trace(type, e, true, String(err)); throw err; }
         trace(type, e, true);
       }, { capture: true, passive: false });
     });
