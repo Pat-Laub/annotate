@@ -162,3 +162,55 @@ test('a viewer draws a packed stroke where the presenter drew it', async ({ page
 
   expect(there, 'the viewer put the stroke somewhere else').toEqual(here);
 });
+
+// An erase used to restate the whole deck to say that two strokes had gone.
+// The strokes can be named by position, the way a scribble's `mark` already
+// names them.
+test('erasing names what went instead of restating the deck', async ({ page }) => {
+  await openPad(page);
+  await drawStroke(page, [[0.25, 0.40], [0.40, 0.44], [0.55, 0.40]]);
+  await drawStroke(page, [[0.25, 0.62], [0.40, 0.66], [0.55, 0.62]]);
+  await watch(page);
+
+  await tool(page, 'eraser').click();
+  await drag(page, [[0.25, 0.40], [0.40, 0.44], [0.55, 0.40]]);
+  await expect(paths(page)).toHaveCount(1);
+
+  const msgs = await page.evaluate(() => window.inkMessages);
+  expect(msgs.some(m => m.a === 'all'), 'the erase restated the whole deck').toBe(false);
+  const rub = msgs.filter(m => m.a === 'rub').pop();
+  expect(rub, 'nothing said what the eraser took').toBeTruthy();
+  expect(rub.m, 'the erased stroke was not named').toEqual([0]);
+});
+
+test('a viewer loses exactly the stroke the eraser took', async ({ page }) => {
+  await openPad(page);
+  await watch(page);                      // from the first stroke, as a viewer sees it
+  await drawStroke(page, [[0.25, 0.40], [0.40, 0.44], [0.55, 0.40]]);
+  await drawStroke(page, [[0.25, 0.62], [0.40, 0.66], [0.55, 0.62]]);
+  await tool(page, 'eraser').click();
+  await drag(page, [[0.25, 0.40], [0.40, 0.44], [0.55, 0.40]]);
+  await expect(paths(page)).toHaveCount(1);
+
+  const here = await page.evaluate(() =>
+    Math.round(document.querySelector('svg.ink-pen path').getBBox().y));
+
+  // Wipe this pad back to nothing and replay the presenter's traffic into it.
+  const there = await page.evaluate(async () => {
+    const messages = window.inkMessages.slice();
+    const play = msg => {
+      const e = new CustomEvent('received');
+      e.content = msg;
+      e.local = true;                     // drawn as it lands, no playback delay
+      document.dispatchEvent(e);
+    };
+    play({ a: 'all', ink: {} });
+    for (const m of messages) play(m);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const kept = document.querySelectorAll('svg.ink-pen path');
+    return { count: kept.length, y: kept.length ? Math.round(kept[0].getBBox().y) : null };
+  });
+
+  expect(there.count, 'the viewer kept the wrong number of strokes').toBe(1);
+  expect(there.y, 'the viewer kept the stroke the eraser took').toBe(here);
+});
