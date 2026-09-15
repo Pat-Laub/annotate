@@ -236,6 +236,15 @@ test('a stylus contact that arrives only as touch events still draws', async ({ 
 
   await stylusTouches(page, 42, [0.2, 0.6], [0.4, 0.6]);
   await expect(paths(page)).toHaveCount(2);
+  // The path exists from the first touch; only its moves and its end make it
+  // a stroke rather than a dot, and only its end frees the touch path for the
+  // contact after it.
+  const width = await page.evaluate(() =>
+    document.querySelectorAll('svg.ink-pen path')[1].getBBox().width);
+  expect(width, 'the touch-only stroke stopped at its first point').toBeGreaterThan(50);
+
+  await stylusTouches(page, 44, [0.2, 0.8], [0.4, 0.8]);
+  await expect(paths(page)).toHaveCount(3);
 });
 
 // The same contact reported both ways -- pointer events, then its touch events
