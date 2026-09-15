@@ -122,3 +122,43 @@ test('opening and closing the tools puts nothing on the wire', async ({ page }) 
   expect(await page.evaluate(() => window.inkMessages),
     'toggling the tools sent the deck').toEqual([]);
 });
+
+// A lecture's ink is one to two megabytes as JSON, and the whole of it goes out
+// whenever a viewer joins. The codec that writes it to localStorage cuts a
+// point from 19.5 bytes to about 7; the wire had simply never used it.
+test('the whole-deck message travels packed', async ({ page }) => {
+  await openPad(page);
+  await drawStroke(page, [[0.35, 0.45], [0.45, 0.5], [0.55, 0.45]]);
+  await lassoTheStroke(page);
+  await watch(page);
+  await drag(page, [[0.45, 0.47], [0.60, 0.47]]);
+
+  const all = await lastAll(page);
+  const sent = all.ink[Object.keys(all.ink)[0]][0];
+  expect(typeof sent.b, 'the stroke went out unpacked').toBe('string');
+  expect(sent.p, 'the points travelled as JSON as well as packed').toBeUndefined();
+});
+
+test('a viewer draws a packed stroke where the presenter drew it', async ({ page }) => {
+  await openPad(page);
+  await drawStroke(page, [[0.35, 0.45], [0.45, 0.5], [0.55, 0.45]]);
+  await watch(page);
+  await lassoTheStroke(page);
+  await drag(page, [[0.45, 0.47], [0.60, 0.47]]);
+
+  const box = b => ({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width) });
+  const here = box(await page.evaluate(() =>
+    document.querySelector('svg.ink-pen path').getBBox()));
+
+  // Replay the presenter's last full state into a fresh pad, as a viewer does.
+  const there = box(await page.evaluate(() => {
+    const all = window.inkMessages.filter(m => m.a === 'all').pop();
+    localStorage.clear();
+    const e = new CustomEvent('received');
+    e.content = all;
+    document.dispatchEvent(e);
+    return document.querySelector('svg.ink-pen path').getBBox();
+  }));
+
+  expect(there, 'the viewer put the stroke somewhere else').toEqual(here);
+});
