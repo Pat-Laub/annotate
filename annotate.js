@@ -282,14 +282,17 @@
     return { t: stroke.t, c: stroke.c, w: stroke.w, s: stroke.s, p: stroke.p.slice(from, to) };
   }
 
-  function Trail(stroke, layer) {
+  // `adopt` is the path render() has already put down for this stroke: a
+  // render mid-stroke replaces the layer's children, so drawing into a fresh
+  // element of our own would leave that one standing beside it.
+  function Trail(stroke, layer, adopt) {
     this.stroke = stroke;
     this.layer = layer;
     this.base = 0;        // where the tail starts, in the stroke's points
     this.pieces = [];
     this.faded = false;   // an armed scribble; the pieces still to come fade too
-    this.el = pathFor(stroke, true);
-    layer.appendChild(this.el);
+    this.el = adopt || pathFor(stroke, true);
+    if (!adopt) layer.appendChild(this.el);
   }
 
   Trail.prototype.draw = function () {
@@ -1296,6 +1299,19 @@
       msg.s.p = [];
       (ink[msg.k] = ink[msg.k] || []).push(msg.s);
       play(arrival);
+    } else if (msg.a === 'rub') {
+      var list = ink[msg.k] || [];
+      var doomed = (msg.m || []).map(function (i) { return list[i]; });
+      var rubbing = incoming[msg.i];
+      if (rubbing) { doomed.push(rubbing.stroke); delete incoming[msg.i]; }
+      ink[msg.k] = list.filter(function (s) { return doomed.indexOf(s) === -1; });
+      // A stroke can still have points queued against the playback delay. Left
+      // alone, the frame that drains them paints it back after this render has
+      // taken it away, and it sits there as a ghost until the next full state.
+      Object.keys(incoming).forEach(function (id) {
+        if (doomed.indexOf(incoming[id].stroke) >= 0) delete incoming[id];
+      });
+      render();
     } else if (msg.a === 'mark') {
       var here = ink[msg.k] || [];
       msg.m.forEach(function (i) {
@@ -1949,13 +1965,21 @@
   // come back to, so this deletes without taking another: one undo puts
   // everything back at once.
   function rub() {
+    var key = slideKey(), here = strokes();
     var gone = live ? marked.concat([live.stroke]) : marked;
-    ink[slideKey()] = strokes().filter(function (s) { return gone.indexOf(s) === -1; });
+    // A viewer holds the same strokes in the same order, so what goes can be
+    // named by position rather than by restating the deck -- the same way the
+    // scribble's `mark` names what it is about to take. The scribble stroke
+    // itself is still on its way there, so it goes by the id it arrived under.
+    var m = marked.map(function (s) { return here.indexOf(s); })
+      .filter(function (i) { return i >= 0; });
+    var scribbled = live ? live.id : null;
+    ink[key] = here.filter(function (s) { return gone.indexOf(s) === -1; });
     armed = false;
     marked = [];
     render();  // takes the faded paths away along with the strokes they showed
     save();
-    sendAll();
+    send({ a: 'rub', k: key, m: m, i: scribbled });
   }
 
   /* ---------------------------------- UI --------------------------------- */
