@@ -180,7 +180,6 @@
   var toolsOpen = false;
   var tool = null;
   var lastTool = 'pen';      // restored after temporarily hiding the tools
-  var hidden = false;        // the ink is parked, showing the slide underneath
   var chrome = MUX !== 'viewer';  // the bottom-left corner buttons are on show
   var ruled = readRules();    // local view preference; never part of shared ink
   var ruleSpacing = readRuleSpacing(); // browser-local guide density
@@ -215,6 +214,7 @@
   var pen = AnnotationModel.isIPad(navigator);
   var stylus = false;        // the stroke in hand has a pressure of its own
   var pointers = false;      // pointer events arrive here, so touches are ignored
+  var pointerId = null;      // the contact the last pointerdown was for
   var touching = null;       // identifier of the touch a stroke is being drawn with
   var activePointer = null;  // only this contact may move or finish the live gesture
   var hovers = 0;            // consecutive hovering mouse moves; see hover()
@@ -736,8 +736,7 @@
       tool: tool, slide: slideKey(), activePointer: activePointer,
       live: !!live, erasing: erasing, lasso: !!lasso, moving: !!moving,
       resizing: !!resizing,
-      touching: touching, held: held, penSeen: pen, pointersSeen: pointers,
-      hidden: hidden
+      touching: touching, held: held, penSeen: pen, pointersSeen: pointers
     };
   }
 
@@ -1263,10 +1262,15 @@
   }
 
   // Everything that is not a stroke in progress — an erase, an undo, a clear,
-  // a load from file, parking the ink — is rare enough to state outright
-  // rather than describe. It doubles as the answer a viewer gets when it joins.
+  // a load from file — is rare enough to state outright rather than describe.
+  // It doubles as the answer a viewer gets when it joins, which is a whole
+  // lecture's ink: packed, the same way it is written to localStorage, since a
+  // point costs about 7 bytes that way against 19.5 as JSON. Round-tripping is
+  // exact for anything a pen drew; a stroke that has been moved or resized can
+  // land a twentieth of a page unit away, which is the precision localStorage
+  // has always given the presenter's own reload.
   function sendAll() {
-    send({ a: 'all', ink: kept(), h: hidden, d: playDelay });
+    send({ a: 'all', ink: AnnotationCodec.packInk(kept()), d: playDelay });
   }
 
   // Whether this window applies what arrives is the transport's business, not
@@ -1274,8 +1278,7 @@
   function receive(msg, local) {
     if (!msg) return;
     if (msg.a === 'all') {
-      ink = msg.ink || {};
-      hidden = !!msg.h;
+      ink = AnnotationCodec.unpackInk(msg.ink || {});
       if (!local && DELAYS.indexOf(msg.d) >= 0) playDelay = msg.d;
       undos = {}; redos = {};  // these describe ink that is no longer here
       incoming = {};           // and neither are the strokes these would extend
@@ -1755,26 +1758,32 @@
   // the chalkboard plugin this replaced drew from touches — and an Apple
   // Pencil on an iPad is what this whole tool is for.
   //
-  // Only ever one of the two paths runs. Pointer events for a gesture are
-  // dispatched before its touch events, so the first pointerdown to arrive
-  // switches this off for the rest of the session; where pointer events work,
-  // these handlers never do anything.
+  // Only ever one of the two paths runs for a contact. Pointer events for a
+  // gesture are dispatched before its touch events, under the touch's own
+  // identifier, so a touch whose pointerdown has just been through down() --
+  // by id, or because the gesture it began is still in hand -- is left alone.
+  // The first pointerdown of the session switches fingers off for good; a
+  // stylus stays on, because iPadOS does not always send a pencil's pointer
+  // events -- while it is cancelling a palm beside it, for one -- and its
+  // touch events are then the only record of the stroke.
   function touchDown(e) {
-    if (pointers || touching !== null) return;
+    if (touching !== null || activePointer !== null) return;
     var t = e.changedTouches[0];
-    if (t.touchType === 'stylus') pen = true;
-    if (pen && t.touchType !== 'stylus') return;  // a palm, or a swipe
+    var stylus = t.touchType === 'stylus';
+    if (pointers && (!stylus || t.identifier === pointerId)) return;
+    if (stylus) pen = true;
+    if (pen && !stylus) return;  // a palm, or a swipe
     touching = t.identifier;
     down(asPointer(e, t));
   }
 
   function touchMove(e) {
-    var t = pointers ? null : sameTouch(e);
+    var t = sameTouch(e);
     if (t) move(asPointer(e, t));
   }
 
   function touchUp(e) {
-    var t = pointers ? null : sameTouch(e);
+    var t = sameTouch(e);
     if (!t) return;
     touching = null;
     up(asPointer(e, t));
@@ -2003,7 +2012,7 @@
   // than racing through the whole palette at once. Ctrl-wheel remains the
   // browser's pinch/zoom gesture.
   function wheelColour(e) {
-    if (hidden || e.ctrlKey || !e.deltaY || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    if (e.ctrlKey || !e.deltaY || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
     e.preventDefault();
     e.stopPropagation();
     var now = Date.now();
@@ -2017,21 +2026,7 @@
     if (tool) lastTool = tool;
     tool = on ? lastTool : null;
     if (!on) moreOpen = false;
-    hidden = false;  // the ink comes back with the tools that made it
     sync();
-    sendAll();  // opening the tools is not itself ink, but the state is shared
-  }
-
-  // Park the ink: the slide as it was written, without the writing on it, for
-  // showing the audience the point before the working. Drawing is suspended
-  // while it is away — a stroke you cannot see is no use — and V brings back
-  // the ink, the panel and the tool that was in hand, all where they were.
-  function hide(on) {
-    if (on && editing) finishText(true);
-    hidden = on;
-    if (on) moreOpen = false;
-    sync();
-    sendAll();  // the audience is who the ink was parked for
   }
 
   // The colour this tool draws in: the swatch's own, except that the first one
@@ -2148,17 +2143,14 @@
   }
 
   function sync() {
-    var key = slideKey(), on = !!tool && !hidden;
+    var key = slideKey(), on = !!tool;
     panel.classList.toggle('active', on);
     surface.classList.toggle('drawing', on);
     surface.classList.toggle('ink-text-mode', tool === 'text');
     surface.classList.toggle('ink-text-dragging', !!textMoving && textMoving.moved);
     if (tool !== 'text') surface.classList.remove('ink-text-target');
-    Object.keys(layers).forEach(function (t) {
-      layers[t].classList.toggle('ink-hidden', hidden);
-    });
-    guide.classList.toggle('ink-rules-hidden', !ruled || hidden);
-    selectionLayer.classList.toggle('ink-hidden', hidden || tool !== 'select');
+    guide.classList.toggle('ink-rules-hidden', !ruled);
+    selectionLayer.classList.toggle('ink-hidden', tool !== 'select');
     // A recognised scribble lights the eraser, but only on the panel: the tool
     // itself has to stay the pen, or the stroke being drawn would be cut off.
     var shown = armed ? 'eraser' : tool;
@@ -2275,7 +2267,7 @@
     // navigation reads the same pointer events, so a stroke can be kept from
     // it by stopping propagation (down(), move() and up() do).
     var input = {
-      pointerdown: function (e) { pointers = true; down(e); forwardSwipe(e); },
+      pointerdown: function (e) { pointers = true; pointerId = e.pointerId; down(e); forwardSwipe(e); },
       pointermove: function (e) { move(e); forwardSwipe(e); },
       pointerup: function (e) { up(e); forwardSwipe(e); },
       pointercancel: up,
@@ -2296,7 +2288,7 @@
         // refuses them on the canvas it hands an Apple Pencil. Non-passive, or
         // the browser is free to ignore the refusal.
         if (type.indexOf('touch') === 0 && e.cancelable) e.preventDefault();
-        input[type](e);
+        try { input[type](e); } catch (err) { trace(type, e, true, String(err)); throw err; }
         trace(type, e, true);
       }, { capture: true, passive: false });
     });
@@ -2426,12 +2418,9 @@
     if (!toolsOpen) {
       toggle = document.createElement('button');
       toggle.className = 'deck-launcher ink-toggle ink-pen';
-      toggle.title = 'Annotate (d), hide the ink (v)';
+      toggle.title = 'Annotate (d)';
       toggle.innerHTML = icon('pen');
-      toggle.addEventListener('click', function () {
-        if (hidden) return hide(false);  // parked ink comes back before anything else
-        open(!tool);
-      });
+      toggle.addEventListener('click', function () { open(!tool); });
     }
 
     var parent = document.querySelector('[data-deck-stage]') || Reveal.getRevealElement();
@@ -2550,14 +2539,7 @@
 
     Reveal.addKeyBinding(
       { keyCode: 68, key: 'D', description: 'Toggle drawing tools' },
-      function () {
-        if (hidden) return hide(false);  // parked ink comes back before anything else
-        open(!tool);
-      }
-    );
-    Reveal.addKeyBinding(
-      { keyCode: 86, key: 'V', description: 'Hide/show the annotations' },
-      function () { hide(!hidden); }
+      function () { open(!tool); }
     );
     Reveal.addKeyBinding(
       { keyCode: 82, key: 'R', description: 'Show/hide ruled writing guides' },
