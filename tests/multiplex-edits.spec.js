@@ -105,3 +105,20 @@ test('a committed text box goes out to viewers', async ({ page }) => {
     (out, k) => out.concat(all.ink[k].map(item => item.v)), []);
   expect(values, 'the text did not go out').toContain('Hello viewers');
 });
+
+// Opening the tools is not an edit. It used to restate the whole deck anyway,
+// which on a lecture's worth of ink is a megabyte or two down the wire every
+// time the pen came out.
+test('opening and closing the tools puts nothing on the wire', async ({ page }) => {
+  await openPad(page);
+  await drawStroke(page, [[0.35, 0.45], [0.45, 0.5], [0.55, 0.45]]);
+  await watch(page);
+
+  await page.keyboard.press('d');
+  await expect(page.locator('.ink-panel.active')).toHaveCount(0);
+  await page.keyboard.press('d');
+  await expect(page.locator('.ink-panel.active')).toHaveCount(1);
+
+  expect(await page.evaluate(() => window.inkMessages),
+    'toggling the tools sent the deck').toEqual([]);
+});
