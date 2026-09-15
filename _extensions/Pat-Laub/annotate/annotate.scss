@@ -67,11 +67,6 @@ $ink-launcher-icon: 120px !default;
   .ink-fading {
     opacity: 0.3;
   }
-
-  // Parked by the V key: the ink is still there, just not on show.
-  &.ink-hidden {
-    display: none;
-  }
 }
 
 // A local writing aid, deliberately separate from the annotation model. In a
