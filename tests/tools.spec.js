@@ -174,3 +174,33 @@ test('a deck can set the starting nib width and replay delay', async ({ page }) 
   await openMore(page);
   await expect(page.locator('.ink-delay text')).toHaveText('0 ms');
 });
+
+// The ink surface is a sibling of `.reveal` and sits above it, so with a tool
+// in hand a tap on one of reveal's own arrows lands on the surface and reveal's
+// click listener never runs -- the pen just draws over the arrow. `ours()`
+// already stands aside for anything in CHROME, but it reads `e.target`, which
+// is the surface, so it cannot see what the tip is actually over. Reported from
+// a lecture on 16 Sep 2026: the arrows used to be tappable with the Pencil.
+test('a tap on reveal\'s arrow reaches it through the ink surface', async ({ page }) => {
+  const count = () => page.evaluate(() =>
+    document.querySelectorAll('.reveal .slides section').length);
+  const at = () => page.evaluate(() => Reveal.getIndices().h);
+
+  await openPad(page);
+
+  // Grow a second page and come back, so the forward arrow has a route and is
+  // enabled; on a single-page deck reveal hides it entirely.
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(count).toBe(2);
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(at).toBe(0);
+
+  await tool(page, 'pen').click();
+  await expect(page.locator('.navigate-right')).toHaveClass(/enabled/);
+
+  const box = await page.locator('.navigate-right').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+
+  await expect.poll(at, { message: 'the arrow did not navigate' }).toBe(1);
+  await expect(paths(page)).toHaveCount(0);
+});
