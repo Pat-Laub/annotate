@@ -42,20 +42,42 @@ test('pen and mouse pointers do not count as palm contacts', () => {
 // blocked. Observed in a lecture on 15 Sep 2026: three swipes in a row reached
 // reveal with no movement at all and were cancelled, the fourth got through.
 test('a contact that never lifts must not block every later swipe', () => {
-  const block = createGuard();
+  let time = 0;
+  const block = createGuard(() => time);
 
   // A palm lands alongside the finger and the gesture is quarantined: correct.
   assert.equal(block('pointerdown', event(1)), false);
   assert.equal(block('pointerdown', event(2)), true);
 
-  // The finger lifts. The palm never does.
+  // The finger lifts. The palm never does, and goes quiet.
   assert.equal(block('pointerup', event(2)), true);
 
   // A clean one-finger swipe afterwards is a genuine gesture and has to reach
   // reveal, or the deck stops changing slides until the page is reloaded.
+  time += 5000;
   assert.equal(block('pointerdown', event(3)), false);
   assert.equal(block('pointermove', event(3)), false);
   assert.equal(block('pointerup', event(3)), false);
+});
+
+// The other half of the same rule: quiet is what makes a contact stale, not
+// merely the passing of time. A finger genuinely held down keeps reporting
+// movement, so it must keep its quarantine however long the gesture runs.
+test('a contact still sending events is never treated as stale', () => {
+  let time = 0;
+  const block = createGuard(() => time);
+
+  assert.equal(block('pointerdown', event(1)), false);
+  assert.equal(block('pointerdown', event(2)), true);
+
+  for (let i = 0; i < 10; i += 1) {
+    time += 1000;
+    assert.equal(block('pointermove', event(1)), true);
+    assert.equal(block('pointermove', event(2)), true);
+  }
+
+  time += 1000;
+  assert.equal(block('pointerdown', event(3)), true);
 });
 
 test('a cancelled contact is gone, whether or not others are still down', () => {
