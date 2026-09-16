@@ -198,6 +198,12 @@ test('a tap on reveal\'s arrow reaches it through the ink surface', async ({ pag
   await tool(page, 'pen').click();
   await expect(page.locator('.navigate-right')).toHaveClass(/enabled/);
 
+  // This deck packs its chrome into a corner: the slide number sits directly
+  // over the 12px arrow, and it is chrome too, so it legitimately takes the tap
+  // first. ACTL2131 puts the counter at the top right, nowhere near the arrows.
+  // Hide it so the point under test is unambiguously the arrow.
+  await page.addStyleTag({ content: '.slide-number { display: none !important; }' });
+
   const box = await page.locator('.navigate-right').boundingBox();
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 

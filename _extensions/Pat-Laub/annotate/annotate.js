@@ -1562,12 +1562,34 @@
   var CHROME = '.ink-panel, .deck-launchers, .ink-text-editor, .controls, .progress,' +
     '.slide-number, .speaker-controls';
 
+  // The topmost chrome under a point, or null. The surface is a sibling of
+  // `.reveal` and stacks above it, so anything reveal draws around the slide --
+  // its arrows above all -- is underneath us and never becomes a target of its
+  // own. `elementsFromPoint` skips `pointer-events: none`, so the full-stage
+  // `.controls` box is not returned and only its buttons can match.
+  function chromeUnder(e) {
+    if (!document.elementsFromPoint || e.clientX === undefined) return null;
+    var stack = document.elementsFromPoint(e.clientX, e.clientY);
+    for (var i = 0; i < stack.length; i++) {
+      var el = stack[i];
+      if (el === surface || !el.closest) continue;
+      var chrome = el.closest(CHROME);
+      if (chrome) return el;
+    }
+    return null;
+  }
+
   function ours(e) {
     if (!tool) return false;
     // Mid-stroke everything is ours, wherever the tip has wandered to.
     if (live || erasing || lasso || moving || resizing || textMoving || touching !== null) return true;
     var t = e.target;
-    return !!t && (!t.closest || !t.closest(CHROME));
+    if (!t) return false;
+    if (t.closest && t.closest(CHROME)) return false;
+    // Chrome we cover reaches us with the surface as the target, so the check
+    // above cannot see it; look under the tip before taking the event.
+    if (t === surface && chromeUnder(e)) return false;
+    return true;
   }
 
   function down(e) {
@@ -1857,6 +1879,30 @@
     });
     copy.inkForwarded = true;
     target.dispatchEvent(copy);
+  }
+
+  // Standing aside is not enough on its own: the surface still has the contact,
+  // so the chrome under it never sees a click of its own. Reveal binds its
+  // arrows on ['touchstart', 'click'], so give the element the click it would
+  // have had -- on release, and only if the tip stayed put, so that a stroke
+  // begun over the corner is never mistaken for a tap.
+  var chromeTap = null;
+  var CHROME_TAP_SLOP = 12;
+
+  function forwardChromeTap(type, e) {
+    if (type === 'pointerdown') {
+      var el = e.target === surface ? chromeUnder(e) : null;
+      chromeTap = el ? { el: el, x: e.clientX, y: e.clientY } : null;
+      return;
+    }
+    if (type !== 'pointerup') return;
+    var tap = chromeTap;
+    chromeTap = null;
+    if (!tap || !tap.el.isConnected) return;
+    if (Math.abs(e.clientX - tap.x) > CHROME_TAP_SLOP ||
+        Math.abs(e.clientY - tap.y) > CHROME_TAP_SLOP) return;
+    if (chromeUnder(e) !== tap.el) return;
+    tap.el.click();
   }
 
   function finishGesture() {
@@ -2303,7 +2349,7 @@
     Object.keys(input).forEach(function (type) {
       window.addEventListener(type, function (e) {
         var handled = ours(e);
-        if (!handled) { trace(type, e, false); return; }
+        if (!handled) { forwardChromeTap(type, e); trace(type, e, false); return; }
         // iPadOS decides for itself what a pencil or a finger on the page
         // means — scroll it, select the text under the tip, start a system
         // gesture — and having decided, it cancels the stream the stroke was
