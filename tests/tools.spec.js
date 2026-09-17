@@ -230,3 +230,16 @@ test('ruled guides are on by default, at the middle of the spacing range', async
   expect(s.closer, 'the default sits at the closest spacing').toBe(false);
   expect(s.farther, 'the default sits at the widest spacing').toBe(false);
 });
+
+// The guides are a writing aid for the person holding the pen. An audience
+// window is only watching, so it gets a clean page unless it asks for them.
+test('a mirrored viewer starts without the ruled guides', async ({ page }) => {
+  await page.goto('/docs/index.html?mirror');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  const guide = page.locator('.ink-guide');
+  await expect(guide).toHaveClass(/ink-rules-hidden/);
+
+  // The shortcut still works there, for anyone who does want them.
+  await page.keyboard.press('r');
+  await expect(guide).not.toHaveClass(/ink-rules-hidden/);
+});
