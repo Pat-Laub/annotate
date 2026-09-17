@@ -210,3 +210,23 @@ test('a tap on reveal\'s arrow reaches it through the ink surface', async ({ pag
   await expect.poll(at, { message: 'the arrow did not navigate' }).toBe(1);
   await expect(paths(page)).toHaveCount(0);
 });
+
+test('ruled guides are on by default, at the middle of the spacing range', async ({ page }) => {
+  await openPad(page);
+  await openMore(page);
+
+  const state = () => page.evaluate(() => ({
+    active: document.querySelector('.ink-panel [data-act="rules"]').classList.contains('active'),
+    hidden: !!document.querySelector('.ink-rules-hidden'),
+    label: document.querySelector('.ink-rule-preview').getAttribute('aria-label'),
+    closer: document.querySelector('.ink-panel [data-act="rules-closer"]').disabled,
+    farther: document.querySelector('.ink-panel [data-act="rules-farther"]').disabled
+  }));
+
+  const s = await state();
+  expect(s.active, 'the guides did not start on').toBe(true);
+  expect(s.hidden).toBe(false);
+  expect(s.label).toBe('Rule spacing: 92 slide units');
+  expect(s.closer, 'the default sits at the closest spacing').toBe(false);
+  expect(s.farther, 'the default sits at the widest spacing').toBe(false);
+});
