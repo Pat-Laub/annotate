@@ -162,7 +162,7 @@
   // Centre ordinary light Pencil writing near perfect-freehand's neutral 0.5
   // width, while retaining useful room on either side for pressure variation.
   var PRESSURE = { enabledByDefault: true, baseline: 0.35, scale: 0.75 };
-  var RULES = { spacing: 52, min: 28, max: 92, step: 8, margin: 64 };
+  var RULES = { spacing: 92, min: 60, max: 124, step: 8, margin: 64 };
   var TEXT = { size: 34, width: 360, lineHeight: 1.25, padding: 0.16, dragThreshold: 6 };
 
   /* -------------------------------- state -------------------------------- */
@@ -627,7 +627,9 @@
   }
 
   function readRules() {
-    try { return localStorage.getItem(RULE_STORE) === 'true'; } catch (e) { return false; }
+    var saved;
+    try { saved = localStorage.getItem(RULE_STORE); } catch (e) { return true; }
+    return saved === null ? true : saved === 'true';
   }
 
   function readRuleSpacing() {
