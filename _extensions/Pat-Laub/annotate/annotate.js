@@ -626,8 +626,13 @@
     return out;
   }
 
+  // The guides are for the person writing. An audience window is watching, so
+  // it starts clean and keeps nothing: the store is shared with the presenting
+  // window on the same device, and the projector is not to inherit its choice.
+  // R still works there, for that window alone.
   function readRules() {
     var saved;
+    if (MUX === 'viewer') return false;
     try { saved = localStorage.getItem(RULE_STORE); } catch (e) { return true; }
     return saved === null ? true : saved === 'true';
   }
@@ -668,7 +673,9 @@
 
   function toggleRules() {
     ruled = !ruled;
-    try { localStorage.setItem(RULE_STORE, ruled); } catch (e) { /* full or blocked */ }
+    if (MUX !== 'viewer') {
+      try { localStorage.setItem(RULE_STORE, ruled); } catch (e) { /* full or blocked */ }
+    }
     renderOverview();
     sync();
   }
