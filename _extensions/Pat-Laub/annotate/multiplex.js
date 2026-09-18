@@ -33,24 +33,54 @@ window.RevealMultiplex = {
 		var EVENTS = [ 'slidechanged', 'fragmentshown', 'fragmenthidden', 'overviewshown',
 			'overviewhidden', 'paused', 'resumed' ];
 
-		/* ----------------------- the window next to this one ------------------ */
-		// Two windows of the same deck in one browser -- one of them dragged onto an
-		// external monitor -- need no relay between them: BroadcastChannel carries
-		// the same messages straight across, same origin, same device. Every window
-		// both talks and listens, so whichever one you touch is the one that leads
-		// and there is nothing to set up or remember.
+		/* ------------------------------ the role ------------------------------ */
+		// One pair of words covers both transports below: a presenter drives, an
+		// audience follows, and a follower puts nothing out on either of them.
 		//
-		// `?mirror` on the end of the address is optional, and only for a window
-		// that is being projected: it takes the audience view's bare chrome and
-		// stops driving, so a stray click on that screen cannot move the lecture.
+		// The course site hands a staff session its credentials in the page
+		// itself, on `?present` or `?project`: no login page, no 180-day token
+		// sitting in a browser, and nothing to have set up on the right device
+		// beforehand. The localStorage pair is the older path and still works,
+		// which is what keeps the published decks and the login page usable until
+		// the new site is the only way in.
+		//
+		// `?mirror` is an audience with nothing to sign in to, and only for a
+		// window that is being projected: the channel below reaches it already, so
+		// the relay has nothing to add and no reason to know about it.
 		var mirror = false;
 		try { mirror = new URLSearchParams( location.search ).has( 'mirror' ); } catch ( e ) {}
-		if ( mirror ) document.documentElement.classList.add( 'multiplex-audience' );
+
+		var handed = window.__multiplex || {};
+		var role = handed.role, token = handed.token;
+		if ( !role || !token ) {
+			try {
+				role = localStorage.getItem( 'multiplex-role' );
+				token = localStorage.getItem( 'multiplex-token' );
+			} catch ( e ) {}              // storage blocked: behave as an ordinary deck
+		}
+		if ( mirror ) {
+			role = 'audience';
+			token = null;
+		} else if ( ( role !== 'presenter' && role !== 'audience' ) || !token ) {
+			role = null;
+			token = null;
+		}
+
+		// The audience view's bare chrome, on the relay's audience and on a mirror
+		// alike: both are screens being watched rather than written on.
+		if ( role === 'audience' ) document.documentElement.classList.add( 'multiplex-audience' );
 
 		// Whether a message about the wrong deck is worth saying out loud. On a
 		// projected screen it is; on someone's second tab it would only be a
 		// caption appearing every time they moved in the first one.
-		var announce = mirror;
+		var announce = role === 'audience';
+
+		/* ----------------------- the window next to this one ------------------ */
+		// Two windows of the same deck in one browser -- one of them dragged onto an
+		// external monitor -- need no relay between them: BroadcastChannel carries
+		// the same messages straight across, same origin, same device. A deck with
+		// no role given to it both talks and listens, so whichever one you touch is
+		// the one that leads and there is nothing to set up or remember.
 
 		// Set while a message off the channel is being applied, because applying one
 		// moves this deck, and moving this deck is what sends messages. Without it a
@@ -73,7 +103,7 @@ window.RevealMultiplex = {
 			channel.onmessage = function ( e ) {
 				if ( !e.data ) return;
 				if ( e.data.sync ) {
-					if ( mirror ) return;      // a mirror has nothing of its own to answer with
+					if ( role === 'audience' ) return;   // a follower has nothing of its own to answer with
 					document.dispatchEvent( new CustomEvent( 'welcome' ) );
 					broadcast();
 					return;
@@ -90,31 +120,15 @@ window.RevealMultiplex = {
 			hello();
 			document.addEventListener( 'rejoin', hello );
 
-			if ( !mirror ) {
+			if ( role !== 'audience' ) {
 				EVENTS.forEach( function ( name ) { deck.on( name, broadcast ); } );
 				document.addEventListener( 'send', broadcast );
 			}
 		}
 
-		if ( mirror ) return;                 // and it drives the relay no more than the channel
-
 		/* ----------------------------- the relay ------------------------------ */
 
-		// The course site hands a staff session its credentials in the page
-		// itself, on `?present` or `?project`: no login page, no 180-day token
-		// sitting in a browser, and nothing to have set up on the right device
-		// beforehand. The localStorage pair is the older path and still works,
-		// which is what keeps the published decks and the login page usable
-		// until the new site is the only way in.
-		var handed = window.__multiplex || {};
-		var role = handed.role, token = handed.token;
-		if ( !role || !token ) {
-			try {
-				role = localStorage.getItem( 'multiplex-role' );
-				token = localStorage.getItem( 'multiplex-token' );
-			} catch ( e ) { return; }         // storage blocked: behave as an ordinary deck
-		}
-		if ( ( role !== 'presenter' && role !== 'audience' ) || !token ) return;
+		if ( !token ) return;                 // a published deck, or a mirror: nothing to sign in to
 
 		var debug = false;
 		try { debug = !!localStorage.getItem( 'multiplex-debug' ); } catch ( e ) {}
@@ -161,9 +175,6 @@ window.RevealMultiplex = {
 			if ( debug ) probe( socket, post );
 
 		} else {
-			document.documentElement.classList.add( 'multiplex-audience' );
-			announce = true;                  // this screen is the one being projected
-
 			var ask = function () { socket.emit( 'sync' ); };
 			socket.on( 'connect', ask );
 			document.addEventListener( 'rejoin', ask );
