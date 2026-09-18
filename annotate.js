@@ -127,12 +127,12 @@
   //
   // Every window takes what the multiplex plugin hands it, whatever this says.
   // What this decides is what a window puts back: a viewer is a screen being
-  // watched -- the projector, or a window opened with ?mirror to be shown on
-  // one -- and it draws nothing, keeps nothing and sends nothing of its own.
+  // watched -- the projector, or a second window of this browser shown on one --
+  // and it draws nothing, keeps nothing and sends nothing of its own.
   var MUX = (function () {
-    // Per window rather than per device, since both windows of one browser
-    // share the localStorage the role below is kept in.
-    if (new URLSearchParams(location.search).has('mirror')) return 'viewer';
+    // `?project` says so per window rather than per device, which the stored
+    // role below cannot: both windows of one browser share that localStorage.
+    if (new URLSearchParams(location.search).has('project')) return 'viewer';
     // Credentials handed to the page win over the stored pair, exactly as they
     // do in multiplex.js: the two must agree, or a window follows the relay as
     // an audience while still keeping and broadcasting ink of its own.
@@ -1248,8 +1248,8 @@
   // few settings either side of it, zero included: the delay is the viewer's
   // behaviour but the presenter's choice, and travels to viewers like the ink.
   //
-  // None of which applies to a mirror window on the same device: nothing is on
-  // the wire, so there is no unevenness to smooth out and no reason to be late.
+  // None of which applies to a window on the same device: nothing is on the
+  // wire, so there is no unevenness to smooth out and no reason to be late.
   // Those strokes are drawn as they land, a frame at a time.
   // The settings are DELAYS, up with the other constants.
 
