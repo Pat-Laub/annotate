@@ -233,8 +233,8 @@ test('ruled guides are on by default, at the middle of the spacing range', async
 
 // The guides are a writing aid for the person holding the pen. An audience
 // window is only watching, so it gets a clean page unless it asks for them.
-test('a mirrored viewer starts without the ruled guides', async ({ page }) => {
-  await page.goto('/docs/index.html?mirror');
+test('a projected viewer starts without the ruled guides', async ({ page }) => {
+  await page.goto('/docs/index.html?project');
   await page.waitForFunction(() => window.Reveal && Reveal.isReady());
   const guide = page.locator('.ink-guide');
   await expect(guide).toHaveClass(/ink-rules-hidden/);
