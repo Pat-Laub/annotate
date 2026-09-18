@@ -66,20 +66,21 @@ test('a presenter drives the windows beside it', async ({ page }) => {
   expect(sent.length, 'the slide change went nowhere').toBeGreaterThan(0);
 });
 
-// ?mirror is that same follower with nothing to sign in to: a window of this
-// browser put on a projector, where the channel already carries everything.
-test('a mirror window follows the channel without answering it', async ({ page }) => {
-  await page.goto('/docs/no-pages.html?mirror');
+// `?project` typed on a deck this device has no credentials for is that same
+// follower with nothing to sign in to: a second window of this browser put on a
+// projector, where the channel carries everything already.
+test('a projected window with no credentials follows the channel without answering it', async ({ page }) => {
+  await page.goto('/docs/no-pages.html?project');
   await page.waitForFunction(() => window.Reveal && Reveal.isReady());
 
   await page.evaluate(() => new BroadcastChannel('reveal-multiplex').postMessage({
     state: { indexh: 1, indexv: 0 }, path: location.pathname
   }));
   await expect.poll(() => page.evaluate(() => Reveal.getIndices().h),
-    { message: 'the mirror did not follow' }).toBe(1);
+    { message: 'the projected window did not follow' }).toBe(1);
 
   await listen(page);
   await page.keyboard.press('ArrowLeft');
   await expect.poll(() => page.evaluate(() => Reveal.getIndices().h)).toBe(0);
-  expect(await settle(page), 'the mirror answered back').toEqual([]);
+  expect(await settle(page), 'the projected window answered back').toEqual([]);
 });
