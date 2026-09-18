@@ -44,11 +44,15 @@ window.RevealMultiplex = {
 		// which is what keeps the published decks and the login page usable until
 		// the new site is the only way in.
 		//
-		// `?mirror` is an audience with nothing to sign in to, and only for a
-		// window that is being projected: the channel below reaches it already, so
-		// the relay has nothing to add and no reason to know about it.
-		var mirror = false;
-		try { mirror = new URLSearchParams( location.search ).has( 'mirror' ); } catch ( e ) {}
+		// `?project` is the site's word for the screen being watched, and it means
+		// the same typed by hand on a deck this device has no credentials for:
+		// that window follows and puts nothing out. Signed in, it follows the
+		// relay too, which is the projector in the theatre; otherwise it follows
+		// the windows beside it, which is a second window of this browser dragged
+		// onto a monitor -- the channel reaches it there, and there is nothing to
+		// sign in to.
+		var projected = false;
+		try { projected = new URLSearchParams( location.search ).has( 'project' ); } catch ( e ) {}
 
 		var handed = window.__multiplex || {};
 		var role = handed.role, token = handed.token;
@@ -58,16 +62,17 @@ window.RevealMultiplex = {
 				token = localStorage.getItem( 'multiplex-token' );
 			} catch ( e ) {}              // storage blocked: behave as an ordinary deck
 		}
-		if ( mirror ) {
-			role = 'audience';
-			token = null;
-		} else if ( ( role !== 'presenter' && role !== 'audience' ) || !token ) {
+		if ( ( role !== 'presenter' && role !== 'audience' ) || !token ) {
 			role = null;
 			token = null;
 		}
+		if ( projected && role !== 'audience' ) {
+			role = 'audience';
+			token = null;                 // this window was not signed in as one
+		}
 
-		// The audience view's bare chrome, on the relay's audience and on a mirror
-		// alike: both are screens being watched rather than written on.
+		// The audience view's bare chrome: this screen is being watched rather
+		// than written on, whichever way it was told so.
 		if ( role === 'audience' ) document.documentElement.classList.add( 'multiplex-audience' );
 
 		// Whether a message about the wrong deck is worth saying out loud. On a
@@ -128,7 +133,7 @@ window.RevealMultiplex = {
 
 		/* ----------------------------- the relay ------------------------------ */
 
-		if ( !token ) return;                 // a published deck, or a mirror: nothing to sign in to
+		if ( !token ) return;                 // nothing to sign in with: this deck talks to its own browser and no further
 
 		var debug = false;
 		try { debug = !!localStorage.getItem( 'multiplex-debug' ); } catch ( e ) {}
@@ -203,9 +208,9 @@ window.RevealMultiplex = {
 		}
 
 		/* ---------------------------- following ------------------------------- */
-		// Shared by the relay's audience and by a mirror window, which differ only
-		// in how the message got here: `local` says it came over the channel, and
-		// travelled no further than this device.
+		// Shared by both transports, which differ only in how the message got
+		// here: `local` says it came over the channel, and travelled no further
+		// than this device.
 		function apply( message, local ) {
 			if ( !message ) return;
 			if ( message.path && message.path !== path ) {
