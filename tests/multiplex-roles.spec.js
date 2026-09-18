@@ -1,0 +1,85 @@
+const { test, expect } = require('@playwright/test');
+
+// multiplex.js has two roles -- a presenter drives, an audience follows -- and
+// two transports: the relay, and the BroadcastChannel that reaches this
+// browser's other windows. The rule is meant to be the same on both, so a
+// window being watched never moves the ones beside it.
+//
+// A second BroadcastChannel object in the same document hears everything the
+// deck's own object sends, which is enough to see what a window puts out
+// without opening a second window to receive it.
+
+const listen = page => page.evaluate(() => {
+  window.channelMessages = [];
+  const channel = new BroadcastChannel('reveal-multiplex');
+  channel.onmessage = event => {
+    if (event.data && !event.data.sync) window.channelMessages.push(event.data);
+  };
+});
+
+async function open(page, handed) {
+  if (handed) await page.addInitScript(given => { window.__multiplex = given; }, handed);
+  await page.goto('/docs/no-pages.html');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  await listen(page);
+}
+
+// Anything the deck posted has arrived by the time a message posted after it
+// has, so the negative assertions below need no sleep.
+async function settle(page) {
+  await page.evaluate(() =>
+    new BroadcastChannel('reveal-multiplex').postMessage({ marker: true }));
+  await page.waitForFunction(() => window.channelMessages.some(m => m.marker));
+  return page.evaluate(() => window.channelMessages.filter(m => !m.marker));
+}
+
+async function nextSlide(page) {
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => page.evaluate(() => Reveal.getIndices().h),
+    { message: 'the deck did not move' }).toBe(1);
+}
+
+test('a plain deck drives the windows beside it', async ({ page }) => {
+  await open(page);
+  await nextSlide(page);
+
+  const sent = await settle(page);
+  expect(sent.length, 'the slide change went nowhere').toBeGreaterThan(0);
+  expect(sent[sent.length - 1].state.indexh).toBe(1);
+});
+
+// The projector Mac signs in as the audience and follows the relay, but it was
+// still driving on the channel: a drag of its own slider, or a stray click,
+// went out to every other window of that browser.
+test('a relay audience does not drive the windows beside it', async ({ page }) => {
+  await open(page, { role: 'audience', token: 'test-token' });
+  await nextSlide(page);
+
+  expect(await settle(page), 'the audience view drove the channel').toEqual([]);
+});
+
+test('a presenter drives the windows beside it', async ({ page }) => {
+  await open(page, { role: 'presenter', token: 'test-token' });
+  await nextSlide(page);
+
+  const sent = await settle(page);
+  expect(sent.length, 'the slide change went nowhere').toBeGreaterThan(0);
+});
+
+// ?mirror is that same follower with nothing to sign in to: a window of this
+// browser put on a projector, where the channel already carries everything.
+test('a mirror window follows the channel without answering it', async ({ page }) => {
+  await page.goto('/docs/no-pages.html?mirror');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+
+  await page.evaluate(() => new BroadcastChannel('reveal-multiplex').postMessage({
+    state: { indexh: 1, indexv: 0 }, path: location.pathname
+  }));
+  await expect.poll(() => page.evaluate(() => Reveal.getIndices().h),
+    { message: 'the mirror did not follow' }).toBe(1);
+
+  await listen(page);
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => page.evaluate(() => Reveal.getIndices().h)).toBe(0);
+  expect(await settle(page), 'the mirror answered back').toEqual([]);
+});
