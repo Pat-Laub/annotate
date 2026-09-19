@@ -1,0 +1,20 @@
+---
+pagetitle: Annotate fixture with the tools put away
+format:
+  slide-stage-revealjs:
+    annotate:
+      tools: closed
+      pages: false
+      penWidth: 5
+      delay: 0
+---
+
+## A lecture deck {#closed-one}
+
+The other fixtures are blank pads, opened to write on. A lecture deck is opened
+to present: its tools start put away behind the corner button, and nothing it
+does on its own may take them out.
+
+## The last slide {#closed-two}
+
+There is nothing after this.
