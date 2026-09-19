@@ -99,3 +99,40 @@ test('previews sit on the card and leave the slide where it was', async ({ page 
       .toBeCloseTo(parseFloat(fit.card[edge]), 1);
   }
 });
+
+// Overview puts the tools away for the duration -- the previews are a grid of
+// slides, not something to write on -- and coming back out has to restore what
+// was in hand rather than assume a pen. A lecture deck opens closed, so `o`
+// twice used to hand over a pen nobody asked for; and because the relay
+// forwards reveal's own overview events, so did every window following along.
+async function roundTrip(page) {
+  await page.evaluate(() => Reveal.toggleOverview(true));
+  await page.waitForFunction(() => Reveal.isOverview());
+  await page.evaluate(() => Reveal.toggleOverview(false));
+  await page.waitForFunction(() => !Reveal.isOverview());
+}
+
+const panel = page => page.locator('.ink-panel');
+
+test('a deck that opens closed comes back from overview closed', async ({ page }) => {
+  await page.goto('/docs/no-pages.html');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  await expect(panel(page)).not.toHaveClass(/\bactive\b/);
+
+  await roundTrip(page);
+  await expect(panel(page)).not.toHaveClass(/\bactive\b/);
+
+  // And a deck that had the tools out keeps them: the trip restores what it
+  // took, in either direction.
+  await page.keyboard.press('d');
+  await expect(panel(page)).toHaveClass(/\bactive\b/);
+  await roundTrip(page);
+  await expect(panel(page)).toHaveClass(/\bactive\b/);
+});
+
+test('the pad comes back from overview with its tools still in hand', async ({ page }) => {
+  await openPad(page);
+  await expect(panel(page)).toHaveClass(/\bactive\b/);
+  await roundTrip(page);
+  await expect(panel(page)).toHaveClass(/\bactive\b/);
+});
