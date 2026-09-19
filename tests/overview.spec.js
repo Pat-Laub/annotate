@@ -115,7 +115,7 @@ async function roundTrip(page) {
 const panel = page => page.locator('.ink-panel');
 
 test('a deck that opens closed comes back from overview closed', async ({ page }) => {
-  await page.goto('/docs/no-pages.html');
+  await page.goto('/docs/closed.html');
   await page.waitForFunction(() => window.Reveal && Reveal.isReady());
   await expect(panel(page)).not.toHaveClass(/\bactive\b/);
 
