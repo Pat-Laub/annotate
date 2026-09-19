@@ -2603,13 +2603,20 @@
       render();
       if (Reveal.isOverview()) renderOverview();
     });
+    // The previews are a grid of slides rather than something to write on, so
+    // the tools go away for the duration -- and come back as they were. Opening
+    // them on the way out hands a pen to a deck that was closed when it went in,
+    // which `o` twice did on every lecture deck, and which the relay passed on
+    // to every window following the presenter through the overview.
+    var toolsBeforeOverview = false;
     Reveal.on('overviewshown', function () {
+      toolsBeforeOverview = !!tool;
       open(false);
       renderOverview();
     });
     Reveal.on('overviewhidden', function () {
       clearOverview();
-      open(true);
+      open(toolsBeforeOverview);
     });
     // Quarto's support plugin binds R to its scroll view and lets reveal fall
     // into it on a narrow viewport; both break a fixed stage you write on.
