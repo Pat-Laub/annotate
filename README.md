@@ -113,7 +113,8 @@ npm test
 `playwright.config.js` reads `scripts/buildpaths.js`, which derives the output
 directory from the working copy's parent and refuses to run in a tree that is
 not `src`, so a test run started here in Dropbox stops rather than testing a
-stale render.
+stale render. Editing a test changes nothing there until the tree is
+synced again: `qr --sync` does that without rendering.
 
 One thing to know when writing more: drive input through `.ink-surface` rather
 than the ink layers — that is the element that actually takes it, and
