@@ -139,6 +139,50 @@ window.RevealMultiplex = {
 			}
 		}
 
+		/* -------------------- browsing away from the presenter ---------------- */
+		// A window that is only watching still has a reason to look back a
+		// slide, and being dragged forward again by the next message is worse
+		// than not moving at all. One moved by hand stops following, says so,
+		// and keeps the way back one tap away -- which is also what an iPad
+		// accidentally opened in Display mode looks like: the first swipe
+		// announces it rather than silently doing nothing.
+		//
+		// Only the slide is held back. Ink keeps arriving and is drawn on the
+		// slide it was made on, so returning live finds the deck written up to
+		// date rather than replaying the interval.
+		var detached = false, missed = null, chip = null;
+
+		if ( role === 'audience' ) deck.on( 'ready', function () {
+			deck.on( 'slidechanged', function () { if ( !applying ) detach(); } );
+		} );
+
+		function detach() {
+			if ( detached ) return;
+			detached = true;
+			if ( !chip ) {
+				chip = document.createElement( 'div' );
+				chip.className = 'multiplex-detached';
+				chip.textContent = 'Not following presenter';
+				var back = document.createElement( 'button' );
+				back.type = 'button';
+				back.textContent = 'Return live';
+				back.addEventListener( 'click', follow );
+				chip.appendChild( back );
+				document.body.appendChild( chip );
+			}
+			chip.hidden = false;
+		}
+
+		function follow() {
+			detached = false;
+			if ( chip ) chip.hidden = true;
+			place( missed );
+			missed = null;
+			// Nothing was missed if the presenter has not moved since, and this
+			// window is then sitting on a slide it chose by hand: ask.
+			document.dispatchEvent( new CustomEvent( 'rejoin' ) );
+		}
+
 		/* ----------------------------- the relay ------------------------------ */
 
 		if ( !token ) return;                 // nothing to sign in with: this deck talks to its own browser and no further
@@ -226,13 +270,26 @@ window.RevealMultiplex = {
 				return;
 			}
 			clearNotice();
-			if ( message.state && moved( message.state ) ) deck.setState( message.state );
+			if ( detached ) missed = message.state || missed;
+			else place( message.state );
 			if ( message.content ) {
 				var event = new CustomEvent( 'received' );
 				event.content = message.content;
 				event.local = local;
 				document.dispatchEvent( event );
 			}
+		}
+
+		// Moving this deck is what sends messages and, on a window that is only
+		// watching, what detaches it -- so every move made on this deck's
+		// behalf goes through here, saying so while it happens. Saved and
+		// restored rather than cleared: the channel already sets it around the
+		// whole of apply().
+		function place( state ) {
+			if ( !state || !moved( state ) ) return;
+			var was = applying;
+			applying = true;
+			try { deck.setState( state ); } finally { applying = was; }
 		}
 
 		// Whether that message is about a slide we are not on. Every ink packet
