@@ -84,3 +84,36 @@ test('a projected window with no credentials follows the channel without answeri
   await expect.poll(() => page.evaluate(() => Reveal.getIndices().h)).toBe(0);
   expect(await settle(page), 'the projected window answered back').toEqual([]);
 });
+
+/* ------------------------ which mode this window is in ------------------ */
+// Annotate and Display are the same deck with the same chrome, and the only
+// way to tell them apart is to draw on one. On the iPad that makes a Display
+// window indistinguishable from a Pencil that has stopped working, which is
+// how a lecture gets spent debugging the wrong thing. Each window says what it
+// is as it opens, and then gets out of the way.
+
+async function openProjected(page) {
+  await page.goto('/docs/no-pages.html?project');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+}
+
+const mode = page => page.locator('.multiplex-mode');
+
+test('a projected window says it is only displaying', async ({ page }) => {
+  await openProjected(page);
+
+  await expect(mode(page)).toContainText(/display/i);
+  await expect(mode(page), 'the caption stayed on the projector').toBeHidden({ timeout: 15_000 });
+});
+
+test('a presenting window says it is the one being written on', async ({ page }) => {
+  await open(page, { role: 'presenter', token: 'test-token' });
+
+  await expect(mode(page)).toContainText(/annotate/i);
+});
+
+test('an ordinary deck says nothing about modes', async ({ page }) => {
+  await open(page);
+
+  await expect(mode(page)).toHaveCount(0);
+});
