@@ -93,12 +93,27 @@ refused on import.
 
 ## Testing
 
+This repository lives in Dropbox, which parks a Quarto render's half-written
+files beside themselves as conflicted copies and leaves the stale ones in
+place — a test run then reads a deck that is a version behind, silently. So
+only the source and `.git` are here: the render, `node_modules` and the
+Playwright output all live in a working copy outside the synced folder, at
+`~/annotate/src`, which `qr` rsyncs this tree to. `.mirrorignore` says what the
+sync leaves alone there, and dropping a line from it deletes what it named on
+the next sync.
+
 ```sh
-npm install
+npm run render                   # = qr: sync, then render in ~/annotate/src
+cd ~/annotate/src
+npm install                      # first time, in the working copy
 npx playwright install chromium firefox webkit
-npm run render
 npm test
 ```
+
+`playwright.config.js` reads `scripts/buildpaths.js`, which derives the output
+directory from the working copy's parent and refuses to run in a tree that is
+not `src`, so a test run started here in Dropbox stops rather than testing a
+stale render.
 
 One thing to know when writing more: drive input through `.ink-surface` rather
 than the ink layers — that is the element that actually takes it, and

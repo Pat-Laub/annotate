@@ -2,7 +2,7 @@
   "name": "annotate-tests",
   "private": true,
   "scripts": {
-    "render": "quarto render",
+    "render": "qr",
     "test": "npm run test:unit && npm run test:browser",
     "test:unit": "node --test test/*.test.js",
     "test:browser": "playwright test",

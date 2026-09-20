@@ -1,9 +1,12 @@
 const { defineConfig, devices } = require('@playwright/test');
+const path = require('path');
+const { BUILD_ROOT } = require('./scripts/buildpaths.js');
 
 // `test/` holds the DOM-free node:test units; `tests/` holds these browser
 // tests, which are what actually cover the drawing tools.
 module.exports = defineConfig({
   testDir: './tests',
+  outputDir: path.join(BUILD_ROOT, 'test-results'),
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: true,
