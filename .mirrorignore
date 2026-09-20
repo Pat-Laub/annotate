@@ -1,0 +1,15 @@
+# What the working copy under $BUILD_ROOT/src does not take from Dropbox.
+#
+# Two roles, and the second is the dangerous one: the sync runs with --delete,
+# so this is also the list of what survives there. node_modules, .venv, .quarto
+# and the render in docs exist only in the working copy -- drop a line and the
+# next sync destroys it. Patterns are rsync's; no trailing slashes, or a
+# symlink of that name is matched as a file and deleted.
+.git
+.quarto
+node_modules
+.venv
+docs
+*conflicted copy*
+.DS_Store
+*_files
