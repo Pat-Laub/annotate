@@ -1569,7 +1569,7 @@
   // something to draw on, exactly as it was when a box over the slide took the
   // input and covered them all.
   var CHROME = '.ink-panel, .deck-launchers, .ink-text-editor, .controls, .progress,' +
-    '.slide-number, .speaker-controls';
+    '.slide-number, .speaker-controls, .multiplex-detached';
 
   // The topmost chrome under a point, or null. The surface is a sibling of
   // `.reveal` and stacks above it, so anything reveal draws around the slide --

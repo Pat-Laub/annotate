@@ -631,6 +631,37 @@ $ink-launcher-icon: 120px !default;
   100% { opacity: 0; }
 }
 
+// The one control an audience window has: it appears when the window has been
+// moved by hand and is no longer following, and goes away when it is.
+.multiplex-detached {
+  position: fixed;
+  left: 50%;
+  bottom: 42px;
+  transform: translateX(-50%);
+  z-index: 61;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 18px 12px 36px;
+  border-radius: 2997px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 39px;
+  font-family: sans-serif;
+
+  &[hidden] { display: none; }
+
+  button {
+    padding: 6px 30px;
+    border: 0;
+    border-radius: 2997px;
+    background: #fff;
+    color: #000;
+    font: inherit;
+    cursor: pointer;
+  }
+}
+
 // Shown only when the presenting device is on a different deck, so the slides
 // deliberately stop following. Small and low-contrast: it is projected.
 .multiplex-notice {
