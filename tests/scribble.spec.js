@@ -89,3 +89,47 @@ test('a viewer fades the ink a scribble has marked', async ({ page }) => {
   });
   expect(faded, 'the viewer shows no ink fading').toBeGreaterThan(0);
 });
+
+// A capital B, captured from an Apple Pencil on an iPad (module-1-2, iPadOS 27)
+// with tests/support/probe-scribble.js in ACTL2131. Written the way it is
+// written by hand: the spine first, then both bowls in one stroke, simplified
+// with the same RDP tolerance the detector applies.
+//
+// The bowls meet the spine at the top, the waist and the foot, and each bowl
+// doubles back along the letter's long axis -- reversals 4, bounding-box
+// overlap 1.00, 3 crossings against a single stroke. All three thresholds are
+// cleared, so the gesture arms and takes the spine. Six of six were erased on
+// the iPad.
+//
+// Scaled 3x about its centre. `travel` is 10 slide units, and this deck's
+// canvas is reveal's default 960x700 against the lecture deck's 3744x2106:
+// at the size it was actually written the letter is 32x53 units here and its
+// doubling back falls under `travel`, which is not the bug. At 3x it is
+// 80x151, close to the 93x144 it occupied on the iPad.
+const B_SPINE = [
+  [0.4299, 0.0727], [0.4332, 0.0688], [0.4332, 0.2191]
+];
+const B_BOWLS = [
+  [0.4113, 0.1234], [0.4014, 0.1507], [0.4047, 0.1312], [0.4344, 0.0745],
+  [0.4488, 0.0532], [0.4629, 0.0394], [0.4719, 0.0355], [0.4761, 0.0394],
+  [0.4752, 0.061], [0.4596, 0.1039], [0.4344, 0.1468], [0.4146, 0.1645],
+  [0.4233, 0.1663], [0.4497, 0.1507], [0.4662, 0.1489], [0.4719, 0.1528],
+  [0.4761, 0.1624], [0.4728, 0.1897], [0.4674, 0.2053], [0.4521, 0.2308],
+  [0.4365, 0.2404], [0.4311, 0.2404], [0.4257, 0.2326]
+];
+
+test('a handwritten B does not scribble out its own spine', async ({ page }) => {
+  await openPad(page);
+  await page.evaluate(() => {
+    window.inkMessages = [];
+    document.addEventListener('send', event => window.inkMessages.push(event.content));
+  });
+
+  await drawStroke(page, B_SPINE);
+  await tool(page, 'pen').click();
+  await drag(page, B_BOWLS, 4);
+
+  const marks = await page.evaluate(() =>
+    window.inkMessages.filter(m => m.a === 'mark'));
+  expect(marks.length, 'writing a B armed the scribble gesture').toBe(0);
+});
