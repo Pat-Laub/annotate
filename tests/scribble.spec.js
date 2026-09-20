@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { openPad, tool, drag, drawStroke } = require('./support/pad');
+const { openPad, paths, tool, drag, drawStroke } = require('./support/pad');
 
 // Sweeping back and forth over the same ink, barely advancing -- a scribble.
 // Long enough that the trail freezes several chunks while the gesture is armed.
@@ -132,4 +132,21 @@ test('a handwritten B does not scribble out its own spine', async ({ page }) => 
   const marks = await page.evaluate(() =>
     window.inkMessages.filter(m => m.a === 'mark'));
   expect(marks.length, 'writing a B armed the scribble gesture').toBe(0);
+});
+
+// A misfire costs two things: the ink underneath, and the stroke that was
+// mistaken for a gesture. Undo gives them back one at a time, so a B whose
+// bowls were read as a scribble comes back as a B before the spine goes.
+test('undo brings the scribble back as ink before undoing the erase', async ({ page }) => {
+  const { mod } = require('./support/pad');
+  await openPad(page);
+  await scribbleOverAStroke(page);
+  await expect(paths(page)).toHaveCount(0);
+
+  await page.keyboard.press(`${mod}+z`);
+  await expect(paths(page)).toHaveCount(2);
+  await expect(page.locator('svg.ink-pen path.ink-fading')).toHaveCount(0);
+
+  await page.keyboard.press(`${mod}+z`);
+  await expect(paths(page)).toHaveCount(1);
 });
