@@ -609,6 +609,28 @@ $ink-launcher-icon: 120px !default;
   .deck-stage > .ink-surface.drawing { pointer-events: auto !important; }
 }
 
+// Which mode the window opened in, said once and then taken away by
+// multiplex.js: a projected screen is not to carry a permanent caption.
+.multiplex-mode {
+  position: fixed;
+  left: 50%;
+  top: 42px;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 12px 36px;
+  border-radius: 2997px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 39px;
+  font-family: sans-serif;
+  animation: multiplex-mode-out 4s ease-in forwards;
+}
+
+@keyframes multiplex-mode-out {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 // Shown only when the presenting device is on a different deck, so the slides
 // deliberately stop following. Small and low-contrast: it is projected.
 .multiplex-notice {
