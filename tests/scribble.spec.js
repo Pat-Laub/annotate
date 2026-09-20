@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { openPad, paths, tool, drag, drawStroke } = require('./support/pad');
+const { openPad, paths, tool, act, drag, drawStroke } = require('./support/pad');
 
 // Sweeping back and forth over the same ink, barely advancing -- a scribble.
 // Long enough that the trail freezes several chunks while the gesture is armed.
@@ -149,4 +149,35 @@ test('undo brings the scribble back as ink before undoing the erase', async ({ p
 
   await page.keyboard.press(`${mod}+z`);
   await expect(paths(page)).toHaveCount(1);
+});
+
+// The export used to be the state the slides ended in, which is the one state
+// that cannot show a gesture misfiring: the stroke it took is gone from it.
+const readLog = page => page.evaluate(key => {
+  const raw = JSON.parse(localStorage.getItem(key) || '{}');
+  return Object.values(raw).flat().map(s => s.x);
+}, 'reveal-ink-erased-v7:' + '/docs/index.html');
+
+test('a scribble keeps what it took, and says it took it', async ({ page }) => {
+  await openPad(page);
+  await scribbleOverAStroke(page);
+  await page.waitForTimeout(600);        // save() is debounced
+
+  const log = await readLog(page);
+  expect(log.length, 'nothing was logged').toBeGreaterThan(0);
+  expect(log.every(x => x.g === 'scribble'), 'not attributed to the scribble').toBe(true);
+  expect(log.some(x => x.r === 'target'), 'the ink it took is missing').toBe(true);
+  expect(log.some(x => x.r === 'gesture'), 'the scribble itself is missing').toBe(true);
+  expect(log.every(x => x.u === 0), 'nothing was undone, but it is marked so').toBe(true);
+});
+
+test('undoing a misfire marks it in the log as one', async ({ page }) => {
+  await openPad(page);
+  await scribbleOverAStroke(page);
+  await act(page, 'undo').click();
+  await page.waitForTimeout(600);
+
+  const log = await readLog(page);
+  expect(log.length, 'nothing was logged').toBeGreaterThan(0);
+  expect(log.every(x => x.u === 1), 'the undo did not mark the erase').toBe(true);
 });

@@ -119,6 +119,13 @@
   // read rather than mis-read. v6 stored the points as plain JSON; v7 packs
   // them (annotate-codec.js) and keeps every sample instead of thinning.
   var STORE = 'reveal-ink-v7:' + location.pathname;
+  // What the ink store deliberately forgets. An export used to be the state the
+  // slides ended in; a stroke that was rubbed out left no trace, so the one
+  // thing a misfiring gesture produces -- the stroke it took, and the scribble
+  // that took it -- was exactly what could not be looked at afterwards. This
+  // keeps them, packed the same way and beside the rest, so a lecture exports
+  // as what happened rather than as what survived.
+  var ERASED_STORE = 'reveal-ink-erased-v7:' + location.pathname;
 
   // Which end of a multiplexed deck this is. The role is stored per device by a sign-in
   // page and read from the same localStorage keys the
@@ -219,6 +226,8 @@
   var activePointer = null;  // only this contact may move or finish the live gesture
   var hovers = 0;            // consecutive hovering mouse moves; see hover()
   var sessionStarted = Date.now();
+  var erased = MUX === 'viewer' ? {} : readErased();   // slide key -> strokes rubbed out, in the order they went
+  var lastRub = null;     // the erase an undo would reverse, so a misfire can be marked as one
   var diagnostics = [];      // bounded, session-only input trace; exported with ink
   var W, H, slides, surface, panel, picker, toggle, guide, rulesPath, selectionLayer, selectionBox, saveTimer;
   var storageFull = false;   // the last save hit the origin's quota
@@ -550,6 +559,7 @@
   // redo branch we are about to diverge from. Every slide has its own stacks,
   // so a change to another slide's ink says which.
   function snapshot(key) {
+    lastRub = null;   // whatever is happening now, it is not undoing that erase
     key = key || slideKey();
     var stack = undos[key] = undos[key] || [];
     stack.push(JSON.stringify(ink[key] || []));
@@ -561,6 +571,10 @@
   function step(from, to) {
     var key = slideKey();
     if (!from[key] || !from[key].length) return;
+    if (from === undos && lastRub && lastRub.key === key) {
+      lastRub.records.forEach(function (rec) { rec.x.u = 1; });
+      lastRub = null;
+    }
     (to[key] = to[key] || []).push(JSON.stringify(ink[key] || []));
     ink[key] = JSON.parse(from[key].pop());
     render();
@@ -612,6 +626,17 @@
   function read() {
     try {
       return AnnotationCodec.unpackInk(JSON.parse(localStorage.getItem(STORE)) || {});
+    } catch (e) {
+      return {};
+    }
+  }
+
+  // A lecture is not one page load: the deck gets reloaded mid-lecture, and a
+  // log that started again each time would miss exactly the misfires worth
+  // having. Nothing reads this back into `ink` -- it is only ever exported.
+  function readErased() {
+    try {
+      return AnnotationCodec.unpackInk(JSON.parse(localStorage.getItem(ERASED_STORE)) || {});
     } catch (e) {
       return {};
     }
@@ -728,6 +753,7 @@
       var full = false;
       try {
         localStorage.setItem(STORE, JSON.stringify(AnnotationCodec.packInk(kept())));
+        localStorage.setItem(ERASED_STORE, JSON.stringify(AnnotationCodec.packInk(erased)));
       } catch (e) {
         full = isFull(e);
       }
@@ -815,6 +841,8 @@
       format: 'scribble-ink',
       version: AnnotationCodec.VERSION,
       canvas: { width: W, height: H },
+      scribble: SCRIBBLE,   // the thresholds these strokes were judged against
+      erased: AnnotationCodec.packInk(erased),
       pages: window.AnnotatePages ? AnnotatePages.count() : Reveal.getTotalSlides(),
       pageIds: window.AnnotatePages ? AnnotatePages.ids() : undefined,
       ink: AnnotationCodec.packInk(kept())
@@ -2040,6 +2068,21 @@
     var m = marked.map(function (s) { return here.indexOf(s); })
       .filter(function (i) { return i >= 0; });
     var scribbled = live ? live.id : null;
+    // `u` is filled in by the undo below. A scribble that is undone straight
+    // away is a false positive, stated as one by the person who saw it happen.
+    var log = erased[key] = erased[key] || [];
+    lastRub = { key: key, records: gone.map(function (s) {
+      var rec = {}, name;
+      for (name in s) rec[name] = s[name];
+      rec.x = {
+        g: live ? 'scribble' : 'eraser',
+        r: live && s === live.stroke ? 'gesture' : 'target',
+        t: Date.now() - sessionStarted,
+        u: 0
+      };
+      log.push(rec);
+      return rec;
+    }) };
     ink[key] = here.filter(function (s) { return gone.indexOf(s) === -1; });
     armed = false;
     marked = [];
