@@ -75,6 +75,14 @@ window.RevealMultiplex = {
 		// than written on, whichever way it was told so.
 		if ( role === 'audience' ) document.documentElement.classList.add( 'multiplex-audience' );
 
+		// Annotate and Display are the same deck with the same chrome, and the
+		// only way to tell them apart is to draw on one. On the iPad that makes
+		// a Display window indistinguishable from a Pencil that has stopped
+		// working. Each window says what it is as it opens and then goes away
+		// again: a projected screen is not to carry a permanent caption.
+		if ( role ) sayMode( role === 'presenter' ? 'Annotate \u2014 you are presenting'
+			: 'Display \u2014 following the presenter' );
+
 		// Whether a message about the wrong deck is worth saying out loud. On a
 		// projected screen it is; on someone's second tab it would only be a
 		// caption appearing every time they moved in the first one.
@@ -288,6 +296,15 @@ window.RevealMultiplex = {
 
 		/* ------------------------- the audience notice ------------------------- */
 		// Deliberately small and quiet: this view is on a projector.
+
+		function sayMode( text ) {
+			var MODE_MS = 4000;   // long enough to read, short enough to miss
+			var caption = document.createElement( 'div' );
+			caption.className = 'multiplex-mode';
+			caption.textContent = text;
+			document.body.appendChild( caption );
+			setTimeout( function () { caption.remove(); }, MODE_MS );
+		}
 
 		var box;
 		function notice( text ) {
