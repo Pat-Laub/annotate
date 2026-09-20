@@ -101,14 +101,26 @@
   // Scribbling over a mistake is the gesture everyone already makes on paper,
   // and it saves reaching for the eraser and back mid-sentence. The thresholds
   // below keep it a narrow gesture: a stroke that sweeps back along its own
-  // long axis at least three times *and* crosses one stroke's ink repeatedly.
-  // An advancing zigzag or a sine wave progresses steadily along its long axis
-  // and so is not a scribble, which is how a sketched waveform stays a sketch;
-  // and because the crossings are counted per stroke, a slash through an
-  // equation or an arrow across a derivation never adds up to a trigger.
+  // long axis several times, gets nowhere doing it, *and* crosses one stroke's
+  // ink repeatedly. An advancing zigzag or a sine wave progresses steadily
+  // along its long axis and so is not a scribble, which is how a sketched
+  // waveform stays a sketch; and because the crossings are counted per stroke,
+  // a slash through an equation or an arrow across a derivation never adds up
+  // to a trigger.
+  //
+  // `reversals` was 2 -- a Z -- and `progress` did not exist. Handwriting
+  // reverses far more than that suggests: over a lecture's 2208 strokes, 491
+  // of them cleared a threshold of 2, and the only thing standing between them
+  // and an erase was the crossing count, which one stroke came within one of
+  // reaching. A capital B written spine-first cleared all three: its bowls
+  // meet the spine at the top, the waist and the foot, and the climb back to
+  // the top to start them reads as the doubling back. `progress` is what tells
+  // the two apart -- a scribble sweeps without travelling, and the same
+  // lecture's near miss scored 0.006 against a B's 0.145 at worst.
   var SCRIBBLE = {
-    reversals: 2,   // direction reversals along the long axis; 2 is a Z
+    reversals: 4,   // direction reversals along the long axis
     travel: 10,     // how far a reversal must go to be one, not end-of-stroke wobble
+    progress: 0.09, // net displacement over path length: a scribble goes nowhere
     overlap: 0.5,   // bounding-box overlap needed before counting crossings
     crossings: 3,   // crossings with a *single* stroke before it is erased
     slack: 4,       // padding on every box, so a straight stroke has an area
@@ -119,6 +131,13 @@
   // read rather than mis-read. v6 stored the points as plain JSON; v7 packs
   // them (annotate-codec.js) and keeps every sample instead of thinning.
   var STORE = 'reveal-ink-v7:' + location.pathname;
+  // What the ink store deliberately forgets. An export used to be the state the
+  // slides ended in; a stroke that was rubbed out left no trace, so the one
+  // thing a misfiring gesture produces -- the stroke it took, and the scribble
+  // that took it -- was exactly what could not be looked at afterwards. This
+  // keeps them, packed the same way and beside the rest, so a lecture exports
+  // as what happened rather than as what survived.
+  var ERASED_STORE = 'reveal-ink-erased-v7:' + location.pathname;
 
   // Which end of a multiplexed deck this is. The role is stored per device by a sign-in
   // page and read from the same localStorage keys the
@@ -219,6 +238,8 @@
   var activePointer = null;  // only this contact may move or finish the live gesture
   var hovers = 0;            // consecutive hovering mouse moves; see hover()
   var sessionStarted = Date.now();
+  var erased = MUX === 'viewer' ? {} : readErased();   // slide key -> strokes rubbed out, in the order they went
+  var lastRub = null;     // the erase an undo would reverse, so a misfire can be marked as one
   var diagnostics = [];      // bounded, session-only input trace; exported with ink
   var W, H, slides, surface, panel, picker, toggle, guide, rulesPath, selectionLayer, selectionBox, saveTimer;
   var storageFull = false;   // the last save hit the origin's quota
@@ -513,6 +534,18 @@
     return n;
   }
 
+  // How far a stroke got, against how far it went to get there. A scribble
+  // sweeps back and forth over one spot and so scores near zero; a letter,
+  // however much it doubles back on its way, still ends up somewhere.
+  function progress(p) {
+    var path = 0;
+    for (var i = 1; i < p.length; i++) {
+      path += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+    }
+    if (!path) return 1;
+    return Math.hypot(p[p.length - 1][0] - p[0][0], p[p.length - 1][1] - p[0][1]) / path;
+  }
+
   // Segment-segment crossings between two polylines, up to `limit` — the caller
   // only asks whether there are at least that many, so stop counting there.
   function crossings(a, b, limit) {
@@ -550,6 +583,7 @@
   // redo branch we are about to diverge from. Every slide has its own stacks,
   // so a change to another slide's ink says which.
   function snapshot(key) {
+    lastRub = null;   // whatever is happening now, it is not undoing that erase
     key = key || slideKey();
     var stack = undos[key] = undos[key] || [];
     stack.push(JSON.stringify(ink[key] || []));
@@ -561,6 +595,10 @@
   function step(from, to) {
     var key = slideKey();
     if (!from[key] || !from[key].length) return;
+    if (from === undos && lastRub && lastRub.key === key) {
+      lastRub.records.forEach(function (rec) { rec.x.u = 1; });
+      lastRub = null;
+    }
     (to[key] = to[key] || []).push(JSON.stringify(ink[key] || []));
     ink[key] = JSON.parse(from[key].pop());
     render();
@@ -612,6 +650,17 @@
   function read() {
     try {
       return AnnotationCodec.unpackInk(JSON.parse(localStorage.getItem(STORE)) || {});
+    } catch (e) {
+      return {};
+    }
+  }
+
+  // A lecture is not one page load: the deck gets reloaded mid-lecture, and a
+  // log that started again each time would miss exactly the misfires worth
+  // having. Nothing reads this back into `ink` -- it is only ever exported.
+  function readErased() {
+    try {
+      return AnnotationCodec.unpackInk(JSON.parse(localStorage.getItem(ERASED_STORE)) || {});
     } catch (e) {
       return {};
     }
@@ -728,6 +777,7 @@
       var full = false;
       try {
         localStorage.setItem(STORE, JSON.stringify(AnnotationCodec.packInk(kept())));
+        localStorage.setItem(ERASED_STORE, JSON.stringify(AnnotationCodec.packInk(erased)));
       } catch (e) {
         full = isFull(e);
       }
@@ -815,6 +865,8 @@
       format: 'scribble-ink',
       version: AnnotationCodec.VERSION,
       canvas: { width: W, height: H },
+      scribble: SCRIBBLE,   // the thresholds these strokes were judged against
+      erased: AnnotationCodec.packInk(erased),
       pages: window.AnnotatePages ? AnnotatePages.count() : Reveal.getTotalSlides(),
       pageIds: window.AnnotatePages ? AnnotatePages.ids() : undefined,
       ink: AnnotationCodec.packInk(kept())
@@ -1569,7 +1621,7 @@
   // something to draw on, exactly as it was when a box over the slide took the
   // input and covered them all.
   var CHROME = '.ink-panel, .deck-launchers, .ink-text-editor, .controls, .progress,' +
-    '.slide-number, .speaker-controls';
+    '.slide-number, .speaker-controls, .multiplex-detached';
 
   // The topmost chrome under a point, or null. The surface is a sibling of
   // `.reveal` and stacks above it, so anything reveal draws around the slide --
@@ -2003,6 +2055,7 @@
   function scribbleTargets(stroke) {
     var p = simplify(stroke.p, SCRIBBLE.tolerance);
     if (p.length < 3 || reversals(p) < SCRIBBLE.reversals) return [];
+    if (progress(p) > SCRIBBLE.progress) return [];
     var box = bounds(p);
     return strokes().filter(function (s) {
       // Only ink of the same colour drawn with the same tool: highlighting over
@@ -2017,11 +2070,22 @@
 
   // Takes away everything currently marked — by a scribble, or by an eraser
   // drag. The snapshot taken when the gesture began is already the state to
-  // come back to, so this deletes without taking another: one undo puts
-  // everything back at once.
+  // come back to, so an eraser drag deletes without taking another: one undo
+  // puts everything back at once.
+  //
+  // A scribble takes a second one first, of the slide as it stands now: the
+  // gesture stroke present as ordinary ink and nothing erased yet. That state
+  // is never drawn, but it is the one a misfire wants — the letter whose last
+  // stroke was read as a scribble comes back whole, and a second undo then
+  // reaches the pre-gesture state an eraser drag reaches in one.
   function rub() {
     var key = slideKey(), here = strokes();
     var gone = live ? marked.concat([live.stroke]) : marked;
+    if (live) {
+      var stack = undos[key] = undos[key] || [];
+      stack.push(JSON.stringify(here));
+      if (stack.length > UNDO_DEPTH) stack.shift();
+    }
     // A viewer holds the same strokes in the same order, so what goes can be
     // named by position rather than by restating the deck -- the same way the
     // scribble's `mark` names what it is about to take. The scribble stroke
@@ -2029,6 +2093,21 @@
     var m = marked.map(function (s) { return here.indexOf(s); })
       .filter(function (i) { return i >= 0; });
     var scribbled = live ? live.id : null;
+    // `u` is filled in by the undo below. A scribble that is undone straight
+    // away is a false positive, stated as one by the person who saw it happen.
+    var log = erased[key] = erased[key] || [];
+    lastRub = { key: key, records: gone.map(function (s) {
+      var rec = {}, name;
+      for (name in s) rec[name] = s[name];
+      rec.x = {
+        g: live ? 'scribble' : 'eraser',
+        r: live && s === live.stroke ? 'gesture' : 'target',
+        t: Date.now() - sessionStarted,
+        u: 0
+      };
+      log.push(rec);
+      return rec;
+    }) };
     ink[key] = here.filter(function (s) { return gone.indexOf(s) === -1; });
     armed = false;
     marked = [];
