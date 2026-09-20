@@ -117,3 +117,62 @@ test('an ordinary deck says nothing about modes', async ({ page }) => {
 
   await expect(mode(page)).toHaveCount(0);
 });
+
+/* ---------------------- browsing away from the presenter ---------------- */
+// A window that is only watching still has a reason to look back a slide, and
+// being dragged forward again by the next message is worse than not moving at
+// all. One moved by hand stops following, says so, and keeps the way back one
+// tap away. It is also what an iPad accidentally opened in Display mode looks
+// like: the first swipe announces it rather than silently doing nothing.
+
+const chip = page => page.locator('.multiplex-detached');
+
+// Post as some other window would. Waits for the deck to have taken it, so a
+// following assertion is not racing the message.
+const tell = (page, indexh) => page.evaluate(h => new BroadcastChannel('reveal-multiplex')
+  .postMessage({ state: { indexh: h, indexv: 0 }, path: location.pathname }), indexh);
+
+const at = page => page.evaluate(() => Reveal.getIndices().h);
+
+test('a projected window moved by hand stops following', async ({ page }) => {
+  await openProjected(page);
+  await listen(page);
+  await tell(page, 1);
+  await expect.poll(() => at(page), { message: 'the window did not follow' }).toBe(1);
+
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => at(page)).toBe(0);
+  await expect(chip(page)).toBeVisible();
+
+  await tell(page, 1);
+  await settle(page);
+  expect(await at(page), 'the presenter dragged the window forward again').toBe(0);
+});
+
+test('Return live puts the window back on the presenter\'s slide', async ({ page }) => {
+  await openProjected(page);
+  await listen(page);
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => at(page)).toBe(1);
+  await expect(chip(page)).toBeVisible();
+
+  await tell(page, 0);
+  await settle(page);
+  expect(await at(page), 'it followed while detached').toBe(1);
+
+  await chip(page).getByRole('button').click();
+
+  await expect.poll(() => at(page), { message: 'it did not catch up' }).toBe(0);
+  await expect(chip(page)).toBeHidden();
+
+  await tell(page, 1);
+  await expect.poll(() => at(page), { message: 'it did not resume following' }).toBe(1);
+});
+
+test('a window that is following says nothing', async ({ page }) => {
+  await openProjected(page);
+  await tell(page, 1);
+  await expect.poll(() => at(page)).toBe(1);
+
+  await expect(chip(page)).toHaveCount(0);
+});
