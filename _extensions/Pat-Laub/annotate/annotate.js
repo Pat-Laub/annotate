@@ -2017,11 +2017,22 @@
 
   // Takes away everything currently marked — by a scribble, or by an eraser
   // drag. The snapshot taken when the gesture began is already the state to
-  // come back to, so this deletes without taking another: one undo puts
-  // everything back at once.
+  // come back to, so an eraser drag deletes without taking another: one undo
+  // puts everything back at once.
+  //
+  // A scribble takes a second one first, of the slide as it stands now: the
+  // gesture stroke present as ordinary ink and nothing erased yet. That state
+  // is never drawn, but it is the one a misfire wants — the letter whose last
+  // stroke was read as a scribble comes back whole, and a second undo then
+  // reaches the pre-gesture state an eraser drag reaches in one.
   function rub() {
     var key = slideKey(), here = strokes();
     var gone = live ? marked.concat([live.stroke]) : marked;
+    if (live) {
+      var stack = undos[key] = undos[key] || [];
+      stack.push(JSON.stringify(here));
+      if (stack.length > UNDO_DEPTH) stack.shift();
+    }
     // A viewer holds the same strokes in the same order, so what goes can be
     // named by position rather than by restating the deck -- the same way the
     // scribble's `mark` names what it is about to take. The scribble stroke
