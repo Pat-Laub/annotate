@@ -101,14 +101,26 @@
   // Scribbling over a mistake is the gesture everyone already makes on paper,
   // and it saves reaching for the eraser and back mid-sentence. The thresholds
   // below keep it a narrow gesture: a stroke that sweeps back along its own
-  // long axis at least three times *and* crosses one stroke's ink repeatedly.
-  // An advancing zigzag or a sine wave progresses steadily along its long axis
-  // and so is not a scribble, which is how a sketched waveform stays a sketch;
-  // and because the crossings are counted per stroke, a slash through an
-  // equation or an arrow across a derivation never adds up to a trigger.
+  // long axis several times, gets nowhere doing it, *and* crosses one stroke's
+  // ink repeatedly. An advancing zigzag or a sine wave progresses steadily
+  // along its long axis and so is not a scribble, which is how a sketched
+  // waveform stays a sketch; and because the crossings are counted per stroke,
+  // a slash through an equation or an arrow across a derivation never adds up
+  // to a trigger.
+  //
+  // `reversals` was 2 -- a Z -- and `progress` did not exist. Handwriting
+  // reverses far more than that suggests: over a lecture's 2208 strokes, 491
+  // of them cleared a threshold of 2, and the only thing standing between them
+  // and an erase was the crossing count, which one stroke came within one of
+  // reaching. A capital B written spine-first cleared all three: its bowls
+  // meet the spine at the top, the waist and the foot, and the climb back to
+  // the top to start them reads as the doubling back. `progress` is what tells
+  // the two apart -- a scribble sweeps without travelling, and the same
+  // lecture's near miss scored 0.006 against a B's 0.145 at worst.
   var SCRIBBLE = {
-    reversals: 2,   // direction reversals along the long axis; 2 is a Z
+    reversals: 4,   // direction reversals along the long axis
     travel: 10,     // how far a reversal must go to be one, not end-of-stroke wobble
+    progress: 0.09, // net displacement over path length: a scribble goes nowhere
     overlap: 0.5,   // bounding-box overlap needed before counting crossings
     crossings: 3,   // crossings with a *single* stroke before it is erased
     slack: 4,       // padding on every box, so a straight stroke has an area
@@ -520,6 +532,18 @@
       }
     }
     return n;
+  }
+
+  // How far a stroke got, against how far it went to get there. A scribble
+  // sweeps back and forth over one spot and so scores near zero; a letter,
+  // however much it doubles back on its way, still ends up somewhere.
+  function progress(p) {
+    var path = 0;
+    for (var i = 1; i < p.length; i++) {
+      path += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+    }
+    if (!path) return 1;
+    return Math.hypot(p[p.length - 1][0] - p[0][0], p[p.length - 1][1] - p[0][1]) / path;
   }
 
   // Segment-segment crossings between two polylines, up to `limit` — the caller
@@ -2031,6 +2055,7 @@
   function scribbleTargets(stroke) {
     var p = simplify(stroke.p, SCRIBBLE.tolerance);
     if (p.length < 3 || reversals(p) < SCRIBBLE.reversals) return [];
+    if (progress(p) > SCRIBBLE.progress) return [];
     var box = bounds(p);
     return strokes().filter(function (s) {
       // Only ink of the same colour drawn with the same tool: highlighting over
