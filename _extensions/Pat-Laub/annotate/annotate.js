@@ -28,8 +28,8 @@
   /* ---------------------------- configuration ---------------------------- */
 
   var COLOURS = [
-    ['Black', '#252525'], ['Red', '#d94827'], ['Blue', '#2668c7'],
-    ['Green', '#0f9d58'], ['Orange', '#e8710a']
+    ['Black', '#252525'], ['Blue', '#2668c7'], ['Green', '#0f9d58'],
+    ['Orange', '#e8710a'], ['Red', '#d94827']
   ];
 
   // How wide each tool draws, in slide coordinates. These defaults are tuned
@@ -69,6 +69,10 @@
   // words it is meant to pick out. The first swatch draws — and shows itself
   // as — the colour a highlighter actually is while that tool is in hand.
   var HIGHLIGHT = '#facc15';
+  // The two tools whose icon carries a colour of its own. The pen has none --
+  // it draws in whichever swatch is picked, so colouring it would be a claim
+  // the tool does not make.
+  var RUBBER = '#f9a8d4';
 
   var ERASER = 10;      // eraser hit radius, in slide coordinates
   var RESIZE_HANDLE = 12; // selection-corner display and touch hit radius
@@ -2122,8 +2126,12 @@
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
     pen: '<path d="M4 20l3.6-1L19.3 7.3a1.8 1.8 0 0 0 0-2.5l-1.1-1.1a1.8 1.8 0 0 0-2.5 0L4 15.4z"/><path d="M14.9 5.6l2.6 2.6"/>',
     text: '<path d="M5 5h14M12 5v14M8 19h8"/>',
-    highlighter: '<path d="M6.5 14.5l6-9.5 5.5 3.7-6.2 9.8H7.6z"/><path d="M4 21h16"/>',
-    eraser: '<path d="M15.6 4.4l4 4a1.6 1.6 0 0 1 0 2.2l-7.5 7.5a1.6 1.6 0 0 1-2.2 0l-4-4a1.6 1.6 0 0 1 0-2.2l7.5-7.5a1.6 1.6 0 0 1 2.2 0z"/><path d="M9 20h11"/>',
+    highlighter: '<path d="M7.7 3.2h8.6v7.4H7.7z"/>' +
+      '<path d="M7.7 10.6h8.6l-2.3 4.9h-4z" fill="' + HIGHLIGHT + '"/>' +
+      '<path d="M3.4 19.9h17.2" stroke="' + HIGHLIGHT + '" stroke-width="3.6"/>',
+    eraser: '<path d="M9.2 18.8l-4-4a1.6 1.6 0 0 1 0-2.3l3.8-3.8 6.3 6.3-3.8 3.8z" fill="' + RUBBER + '"/>' +
+      '<path d="M9.2 18.8l-4-4a1.6 1.6 0 0 1 0-2.3l7.6-7.6a1.6 1.6 0 0 1 2.3 0l4 4a1.6 1.6 0 0 1 0 2.3l-7.6 7.6z"/>' +
+      '<path d="M9.6 9.6l6.2 6.2"/><path d="M12.4 18.8h7.6"/>',
     select: '<path d="M5.2 6.4c2.5-3 9.8-3 12.8.2 3.5 3.7.8 9.9-4.7 11.7-5.6 1.8-10.4-1.3-9.1-5.8.8-2.7 4.4-4.2 8.1-3.4" stroke-dasharray="2.5 2.5"/><path d="M16.5 16.5l3.5 3.5"/>',
     copy: '<rect x="8" y="8" width="11" height="11" rx="1.5"/><path d="M16 8V5H5v11h3"/>',
     paste: '<path d="M9 6h6v3H9z"/><path d="M8 7H6v13h12V7h-2"/><path d="M9 13h6M9 17h5"/>',
@@ -2201,6 +2209,18 @@
 
   function inkColour() {
     return tool === 'highlighter' && colour === COLOURS[0][1] ? HIGHLIGHT : colour;
+  }
+
+  // What the ring around a tool is coloured: what that tool would put on the
+  // slide if you picked it up now. The pen and highlighter follow the chosen
+  // swatch -- the highlighter turning yellow on black, as its own swatch does
+  // -- and the eraser wears its rubber. A lasso and a text box lay down no
+  // ink, so they fall back to the neutral in the stylesheet.
+  function ringColour(name) {
+    if (name === 'pen') return colour;
+    if (name === 'highlighter') return colour === COLOURS[0][1] ? HIGHLIGHT : colour;
+    if (name === 'eraser') return RUBBER;
+    return null;
   }
 
   // Redraw the current slide's ink from scratch. The lists are short (a slide
@@ -2314,6 +2334,9 @@
     var shown = armed ? 'eraser' : tool;
     panel.querySelectorAll('[data-tool]').forEach(function (b) {
       b.classList.toggle('active', b.dataset.tool === shown);
+      var ring = ringColour(b.dataset.tool);
+      if (ring) b.style.setProperty('--ink-ring', ring);
+      else b.style.removeProperty('--ink-ring');
     });
     panel.querySelectorAll('[data-colour]').forEach(function (b) {
       b.classList.toggle('active', b.dataset.colour === colour);
@@ -2505,9 +2528,11 @@
       '<hr>' +
       button('data-tool', 'pen', 'Pen') +
       button('data-tool', 'highlighter', 'Highlighter') +
-      button('data-tool', 'text', 'Text box') +
+      '<hr>' +
       button('data-tool', 'eraser', 'Eraser (whole strokes; or hold the right button)') +
+      '<hr>' +
       button('data-tool', 'select', 'Lasso and move') +
+      button('data-tool', 'text', 'Text box') +
       '<hr>' +
       button('data-act', 'undo', 'Undo (⌘Z)') +
       button('data-act', 'redo', 'Redo (⇧⌘Z)') +
