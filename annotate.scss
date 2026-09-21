@@ -10,6 +10,9 @@
 // at a fraction of everything beside it.
 
 $ink-accent: #2668c7 !default;
+// The ring on the tool in hand, for the tools that draw in no colour of their
+// own. The ones that do -- pen, highlighter, eraser -- set `--ink-ring`.
+$ink-ring: #9b9790 !default;
 $ink-panel-width: 132px !default;
 $ink-button-size: 102px !default;
 // Matches the icon the stage draws in the corner row the pen joins.
@@ -298,7 +301,17 @@ $ink-launcher-icon: 120px !default;
   }
 }
 
-.deck-stage .ink-btn.active,
+// The tool in hand wears a ring in the colour it will draw, the way a chosen
+// swatch already does. It is drawn inside the button: the rail is 132px across
+// and a button 102px, so a ring outside it would sit on the panel's edge.
+// A filled block would also be $ink-accent, which is the Blue swatch exactly --
+// the mark for "this tool" cannot be one of the five colours it draws in.
+.deck-stage .ink-btn.active {
+  box-shadow: inset 0 0 0 7px var(--ink-ring, #{$ink-ring});
+}
+
+// The labelled rows in the tray are not the rail: nothing there draws, so
+// there is no colour to carry and the plain fill still reads best.
 .deck-stage .ink-option.active {
   background: $ink-accent;
   color: #fff;
