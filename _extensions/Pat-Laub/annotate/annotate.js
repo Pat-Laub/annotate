@@ -2353,6 +2353,69 @@
     });
   }
 
+  // Reveal's own controls: the arrows, and whatever a plugin puts beside them.
+  // They sit inside `.reveal` and outside `.slides`, under the surface rather
+  // than over it, so they need holes cut for them the way a slide's own
+  // controls do -- and for a sharper reason. Reveal binds them on
+  // `['touchstart', 'click']`, and on a touch device on `['touchstart']` alone:
+  // the click listener is not merely a second way in, it is gone. Handing such
+  // an arrow a click reaches nothing at all, which is why the arrows worked in
+  // every desktop browser and were drawn on by a pencil on the iPad.
+  //
+  // Leaf controls only. `.controls` is a box the size of the stage and a hole
+  // that shape would be the whole slide.
+  var REVEAL_CHROME = 'button, a[href], [role="button"]';
+
+  function revealChrome() {
+    var root = window.Reveal && Reveal.getRevealElement && Reveal.getRevealElement();
+    if (!root) return [];
+    return [].filter.call(root.querySelectorAll(REVEAL_CHROME), function (el) {
+      return !el.closest(SLIDES);
+    });
+  }
+
+  // Worth a hole only if a contact would reach it: reveal leaves the arrow it
+  // cannot navigate to in place and takes its pointer events away, and a
+  // control on an unrevealed fragment has no box yet. A hole over either is a
+  // hole in the slide where nothing can be drawn and nothing can be pressed.
+  function takesAContact(el) {
+    var style = getComputedStyle(el);
+    if (style.pointerEvents === 'none' || style.visibility === 'hidden') return false;
+    if (parseFloat(style.opacity) < 0.1) return false;
+    var r = el.getBoundingClientRect();
+    return !!(r.width && r.height);
+  }
+
+  // Holes that overlap have to become one hole before they are drawn.
+  //
+  // `evenodd` counts crossings, so a point inside two holes is inside an even
+  // number of them and the surface closes over it again -- solid again exactly
+  // where two controls meet, which is the corner reveal stacks its arrows and
+  // its slide number in. `nonzero` with the holes wound the other way cancels
+  // in the same way. Overlapping boxes are therefore merged into the box that
+  // contains them, repeatedly, until none of them touch: a little more than was
+  // asked for at a corner where both neighbours are controls anyway.
+  function merged(rects) {
+    var out = rects.slice();
+    for (var again = true; again; ) {
+      again = false;
+      for (var i = 0; i < out.length && !again; i++) {
+        for (var j = i + 1; j < out.length; j++) {
+          var a = out[i], b = out[j];
+          if (a.x > b.x2 || b.x > a.x2 || a.y > b.y2 || b.y > a.y2) continue;
+          out[i] = {
+            x: Math.min(a.x, b.x), y: Math.min(a.y, b.y),
+            x2: Math.max(a.x2, b.x2), y2: Math.max(a.y2, b.y2)
+          };
+          out.splice(j, 1);
+          again = true;
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
   // Cut a hole in the input surface over every live control on the slide, so
   // that a pencil reaches the control rather than this.
   //
@@ -2371,6 +2434,8 @@
     if (!surface) return;
     var slide = window.Reveal && Reveal.getCurrentSlide && Reveal.getCurrentSlide();
     var holes = tool && slide ? [].slice.call(slide.querySelectorAll(PASSTHROUGH)) : [];
+    if (tool) holes = holes.concat(revealChrome());
+    holes = holes.filter(takesAContact);
     if (!holes.length) { surface.style.clipPath = ''; return; }
 
     var box = surface.getBoundingClientRect();
@@ -2378,24 +2443,41 @@
     var scale = w && box.width ? box.width / w : 1;
     if (!w || !h || !scale) { surface.style.clipPath = ''; return; }
 
-    var d = 'M0 0H' + w + 'V' + h + 'H0Z';
-    var cut = 0;
-    holes.forEach(function (el) {
+    var rects = merged(holes.map(function (el) {
       var r = el.getBoundingClientRect();
-      if (!r.width || !r.height) return;   // a control on a hidden fragment
-      var x = (r.left - box.left) / scale, y = (r.top - box.top) / scale;
-      var x2 = x + r.width / scale, y2 = y + r.height / scale;
-      d += 'M' + x + ' ' + y + 'H' + x2 + 'V' + y2 + 'H' + x + 'Z';
-      cut++;
+      return {
+        x: (r.left - box.left) / scale, y: (r.top - box.top) / scale,
+        x2: (r.right - box.left) / scale, y2: (r.bottom - box.top) / scale
+      };
+    }));
+
+    var d = 'M0 0H' + w + 'V' + h + 'H0Z';
+    rects.forEach(function (r) {
+      d += 'M' + r.x + ' ' + r.y + 'H' + r.x2 + 'V' + r.y2 + 'H' + r.x + 'Z';
     });
-    surface.style.clipPath = cut ? 'path(evenodd, "' + d + '")' : '';
+    surface.style.clipPath = rects.length ? 'path(evenodd, "' + d + '")' : '';
+  }
+
+  // Reveal enables and disables its arrows while handling the same
+  // `slidechanged` this is hung off, and a fragment moves what it moves after
+  // the event rather than during it. Measuring on the frame after settles both,
+  // and coalesces the burst of resizes a rotating iPad sends.
+  var clipQueued = false;
+  function reclip() {
+    if (clipQueued) return;
+    clipQueued = true;
+    requestAnimationFrame(function () { clipQueued = false; clipSurface(); });
   }
 
   function sync() {
     var key = slideKey(), on = !!tool;
     panel.classList.toggle('active', on);
     surface.classList.toggle('drawing', on);
+    // Now, so the holes are there for a tip already on its way down, and again
+    // on the next frame: reveal marks an arrow usable in its own time, and a
+    // hole measured a moment too early is one the arrow never gets.
     clipSurface();
+    reclip();
     surface.classList.toggle('ink-text-mode', tool === 'text');
     surface.classList.toggle('ink-text-dragging', !!textMoving && textMoving.moved);
     if (tool !== 'text') surface.classList.remove('ink-text-target');
@@ -2777,17 +2859,17 @@
     Reveal.on('slidechanged', function () {
       if (editing) finishText(true);
       render();
-      clipSurface();
+      reclip();
       if (Reveal.isOverview()) renderOverview();
     });
     // The holes are measured from where the controls are, so anything that
     // moves them has to be followed: a fragment that reflows the slide, and the
     // stage being refitted to a resized window or a rotated iPad.
-    Reveal.on('fragmentshown', clipSurface);
-    Reveal.on('fragmenthidden', clipSurface);
-    Reveal.on('ready', clipSurface);
-    window.addEventListener('resize', clipSurface);
-    window.addEventListener('orientationchange', clipSurface);
+    Reveal.on('fragmentshown', reclip);
+    Reveal.on('fragmenthidden', reclip);
+    Reveal.on('ready', reclip);
+    window.addEventListener('resize', reclip);
+    window.addEventListener('orientationchange', reclip);
     // The previews are a grid of slides rather than something to write on, so
     // the tools go away for the duration -- and come back as they were. Opening
     // them on the way out hands a pen to a deck that was closed when it went in,
