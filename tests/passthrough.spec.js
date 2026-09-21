@@ -80,6 +80,36 @@ test.describe('a tool in hand leaves live controls alone', () => {
       'the button never saw the click').toBe(1);
     await expect(penPaths(page), 'the click was taken as ink').toHaveCount(0);
   });
+
+  // Reveal binds its arrows on `['touchstart', 'click']` -- and on a touch
+  // device on `['touchstart']` alone, dropping the click listener altogether.
+  // So the arrows cannot be worked by handing them a click: on the iPad there
+  // is nothing listening for one, which is why they kept being drawn on there
+  // while passing every test run on a desktop browser.
+  //
+  // What that leaves is the contact itself having to arrive at the arrow, the
+  // same as for a slider. Stated as the hit test rather than as a navigation,
+  // because it is the hit test that decides it for every event reveal might
+  // bind, now or later, rather than for the one this test would name.
+  test('reveal\'s arrows are what the tip lands on, not the surface', async ({ page }) => {
+    await openDeck(page, 'controls');
+    await takeThePen(page);
+
+    const landing = await page.evaluate(() => {
+      const arrow = document.querySelector('.reveal .controls .navigate-right');
+      if (!arrow) return 'there is no right arrow on this deck';
+      const r = arrow.getBoundingClientRect();
+      const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (!el) return 'nothing is under the arrow';
+      // Whether the topmost thing there is the arrow itself or another of
+      // reveal's own -- this fixture stacks its slide number in the same corner
+      // -- is reveal's business. Annotate's is to not be the answer.
+      return el.closest('.ink-surface') ? 'the ink surface' : 'reveal\'s own';
+    });
+
+    expect(landing, 'the surface still takes the tap meant for the arrow')
+      .toBe('reveal\'s own');
+  });
 });
 
 // slide-stage's overview grid is a panel appended beside the stage, outside
