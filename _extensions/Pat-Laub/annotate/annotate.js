@@ -1619,27 +1619,58 @@
     return ((cfg && cfg.zoomKey) || (/Linux/.test(navigator.platform) ? 'ctrl' : 'alt')) + 'Key';
   }
 
-  // The controls a tap has to be able to reach with a tool in hand: ours, and
-  // the ones reveal and its plugins put around the slide. Everything else
-  // inside the deck — including a link in the middle of a paragraph — is
-  // something to draw on, exactly as it was when a box over the slide took the
-  // input and covered them all.
-  var CHROME = '.ink-panel, .deck-launchers, .ink-text-editor, .controls, .progress,' +
-    '.slide-number, .speaker-controls, .multiplex-detached';
+  // The controls a tap has to be able to reach with a tool in hand: ours, the
+  // ones reveal and its plugins put around the slide, and the slide's own.
+  //
+  // Said by where a thing sits rather than by name. Chrome is whatever lies
+  // over the deck without being part of a slide, so a panel another extension
+  // appends is reached without annotate having been told it exists. The list of
+  // class names this replaced could only name what was there when it was
+  // written: slide-stage's slide overview came later, was not on it, and a tap
+  // on a preview was taken as ink -- which on an iPad, with no Esc to fall back
+  // on, left the grid up with no way out of it at all.
+  //
+  // `.slides` is the boundary. Everything under it is a slide and is drawn on,
+  // a link in the middle of a paragraph included; everything over the deck and
+  // outside it is a control. The deck's own frame is neither, and ends the
+  // search: reaching one of these means there was nothing over the slide.
+  var STRUCTURE = '.reveal, [data-deck-stage], .deck-viewport-shell, body, html';
+  var SLIDES = '.reveal .slides';
 
-  // The topmost chrome under a point, or null. The surface is a sibling of
-  // `.reveal` and stacks above it, so anything reveal draws around the slide --
-  // its arrows above all -- is underneath us and never becomes a target of its
-  // own. `elementsFromPoint` skips `pointer-events: none`, so the full-stage
+  // The exception inside a slide: its live controls -- the range a sweep is
+  // watched on, the button that redraws a sample. These are worked rather than
+  // drawn on, and the surface cuts a hole over each of them (see `clipSurface`)
+  // so that the contact reaches the control itself. A hole rather than a
+  // forwarded event because a native control moves for a trusted event and for
+  // nothing else: a synthesised pointer stream leaves a range where it was.
+  // The hole is a hole both ways -- what can be dragged cannot be drawn on.
+  var PASSTHROUGH = 'input, select, textarea, button, ' +
+    '[contenteditable=""], [contenteditable="true"]';
+
+  function inSlide(el) { return !!(el.closest && el.closest(SLIDES)); }
+
+  // Something to be worked rather than drawn on.
+  function reachable(el) {
+    if (!el || el === surface || !el.closest || !el.matches) return false;
+    if (inSlide(el)) return !!el.closest(PASSTHROUGH);
+    return !el.matches(STRUCTURE);
+  }
+
+  // The topmost such thing under a point, or null. Chrome that stacks *below*
+  // the surface -- reveal's arrows above all -- never becomes the target of
+  // anything, so the tip has to be looked under rather than the target asked.
+  // `elementsFromPoint` skips `pointer-events: none`, so the full-stage
   // `.controls` box is not returned and only its buttons can match.
   function chromeUnder(e) {
     if (!document.elementsFromPoint || e.clientX === undefined) return null;
     var stack = document.elementsFromPoint(e.clientX, e.clientY);
     for (var i = 0; i < stack.length; i++) {
       var el = stack[i];
-      if (el === surface || !el.closest) continue;
-      var chrome = el.closest(CHROME);
-      if (chrome) return el;
+      if (el === surface || !el.closest || !el.matches) continue;
+      if (reachable(el)) return el;
+      // The first thing under the tip that is not reachable is the slide, or
+      // the frame around it: either way nothing was lying over it.
+      if (inSlide(el) || el.matches(STRUCTURE)) return null;
     }
     return null;
   }
@@ -1650,7 +1681,9 @@
     if (live || erasing || lasso || moving || resizing || textMoving || touching !== null) return true;
     var t = e.target;
     if (!t) return false;
-    if (t.closest && t.closest(CHROME)) return false;
+    // Chrome that stacks above the surface, and any control the surface has cut
+    // a hole over, reach us as themselves.
+    if (t !== surface && reachable(t)) return false;
     // Chrome we cover reaches us with the surface as the target, so the check
     // above cannot see it; look under the tip before taking the event.
     if (t === surface && chromeUnder(e)) return false;
@@ -2320,10 +2353,49 @@
     });
   }
 
+  // Cut a hole in the input surface over every live control on the slide, so
+  // that a pencil reaches the control rather than this.
+  //
+  // Standing aside in `ours()` is not enough for these the way it is for a
+  // button: a forwarded click drives a JavaScript listener, which is all
+  // reveal's arrows are, but a range or a checkbox is moved by the browser's
+  // own default action and that runs on trusted events only. The contact has to
+  // land on the control, which means the surface must not be what is under the
+  // tip -- and hit testing, unlike anything `ours()` can decide after the fact,
+  // is settled before the event exists. So the surface is given the shape it
+  // needs in advance.
+  //
+  // `clip-path` coordinates are the element's own, before the stage's fit
+  // transform; `getBoundingClientRect` reports after it. Hence the scale.
+  function clipSurface() {
+    if (!surface) return;
+    var slide = window.Reveal && Reveal.getCurrentSlide && Reveal.getCurrentSlide();
+    var holes = tool && slide ? [].slice.call(slide.querySelectorAll(PASSTHROUGH)) : [];
+    if (!holes.length) { surface.style.clipPath = ''; return; }
+
+    var box = surface.getBoundingClientRect();
+    var w = surface.offsetWidth, h = surface.offsetHeight;
+    var scale = w && box.width ? box.width / w : 1;
+    if (!w || !h || !scale) { surface.style.clipPath = ''; return; }
+
+    var d = 'M0 0H' + w + 'V' + h + 'H0Z';
+    var cut = 0;
+    holes.forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return;   // a control on a hidden fragment
+      var x = (r.left - box.left) / scale, y = (r.top - box.top) / scale;
+      var x2 = x + r.width / scale, y2 = y + r.height / scale;
+      d += 'M' + x + ' ' + y + 'H' + x2 + 'V' + y2 + 'H' + x + 'Z';
+      cut++;
+    });
+    surface.style.clipPath = cut ? 'path(evenodd, "' + d + '")' : '';
+  }
+
   function sync() {
     var key = slideKey(), on = !!tool;
     panel.classList.toggle('active', on);
     surface.classList.toggle('drawing', on);
+    clipSurface();
     surface.classList.toggle('ink-text-mode', tool === 'text');
     surface.classList.toggle('ink-text-dragging', !!textMoving && textMoving.moved);
     if (tool !== 'text') surface.classList.remove('ink-text-target');
@@ -2705,8 +2777,17 @@
     Reveal.on('slidechanged', function () {
       if (editing) finishText(true);
       render();
+      clipSurface();
       if (Reveal.isOverview()) renderOverview();
     });
+    // The holes are measured from where the controls are, so anything that
+    // moves them has to be followed: a fragment that reflows the slide, and the
+    // stage being refitted to a resized window or a rotated iPad.
+    Reveal.on('fragmentshown', clipSurface);
+    Reveal.on('fragmenthidden', clipSurface);
+    Reveal.on('ready', clipSurface);
+    window.addEventListener('resize', clipSurface);
+    window.addEventListener('orientationchange', clipSurface);
     // The previews are a grid of slides rather than something to write on, so
     // the tools go away for the duration -- and come back as they were. Opening
     // them on the way out hands a pen to a deck that was closed when it went in,
