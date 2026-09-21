@@ -1,0 +1,25 @@
+---
+pagetitle: Annotate fixture with interactive slide content
+format:
+  slide-stage-revealjs:
+    annotate:
+      tools: closed
+      pages: false
+      penWidth: 5
+      delay: 0
+---
+
+## A slide you work as well as read {#controls-one}
+
+A lecture deck's slides are not all inert. This one carries the shapes ACTL2131
+puts on its "In R" slides -- a range the audience watches being swept, and a
+button that redraws a sample -- so that what a pen in hand does to them is
+something the suite can state rather than something a lecture discovers.
+
+<input class="fixture-range" type="range" min="0" max="100" value="40">
+
+<button class="fixture-button" type="button">Resample</button>
+
+## The last slide {#controls-two}
+
+There is nothing after this.
