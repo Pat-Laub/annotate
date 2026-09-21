@@ -243,3 +243,24 @@ test('a projected viewer starts without the ruled guides', async ({ page }) => {
   await page.keyboard.press('r');
   await expect(guide).not.toHaveClass(/ink-rules-hidden/);
 });
+
+// The mark for "this tool is in hand" is a ring in the colour that tool would
+// lay down, so the rail answers what the next stroke will look like. A filled
+// block cannot: it would be $ink-accent, which is the Blue swatch exactly.
+test('the tool in hand is ringed in the colour it draws', async ({ page }) => {
+  await openPad(page);
+  const ring = name => page.locator(`.ink-panel [data-tool="${name}"]`)
+    .evaluate(el => el.style.getPropertyValue('--ink-ring').trim());
+
+  await page.locator('.ink-panel [data-colour="#d94827"]').click();
+  expect(await ring('pen'), 'the pen does not follow the chosen swatch').toBe('#d94827');
+
+  // Black is the one swatch the highlighter overrides: it lays down yellow.
+  await page.locator('.ink-panel [data-colour="#252525"]').click();
+  expect(await ring('highlighter'), 'the highlighter is not yellow on black').toBe('#facc15');
+  expect(await ring('pen'), 'the pen is not black on black').toBe('#252525');
+
+  // Nothing is drawn by these two, so they take the stylesheet's neutral.
+  expect(await ring('eraser'), 'the eraser is not its rubber colour').toBe('#f9a8d4');
+  expect(await ring('select'), 'the lasso claims a colour it has none of').toBe('');
+});
