@@ -1634,7 +1634,8 @@
   // a link in the middle of a paragraph included; everything over the deck and
   // outside it is a control. The deck's own frame is neither, and ends the
   // search: reaching one of these means there was nothing over the slide.
-  var STRUCTURE = '.reveal, [data-deck-stage], .deck-viewport-shell, body, html';
+  var STRUCTURE = '.reveal, .reveal .backgrounds, .reveal .backgrounds *, ' +
+    '[data-deck-stage], .deck-viewport-shell, body, html';
   var SLIDES = '.reveal .slides';
 
   // The exception inside a slide: its live controls -- the range a sweep is
