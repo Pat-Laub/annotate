@@ -133,6 +133,47 @@ test('a finger swipe turns the page with a tool in hand', async ({ page }) => {
     { message: 'the swipe did not turn the page' }).toBe(1);
 });
 
+// A title slide is a short box centred on the page, so below it the topmost
+// thing under a finger is reveal's slide background, outside `.slides`. That
+// is the page, not a control to stand aside for, and the swipe still has to
+// reach reveal.
+test('a finger swipe over bare slide background turns the page', async ({ page }) => {
+  await page.goto('/docs/no-pages.html');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  await page.locator('.ink-surface').waitFor();
+  await tool(page, 'pen').click();
+
+  const under = await page.evaluate(() => {
+    const slide = Reveal.getCurrentSlide();
+    slide.style.height = '20%';
+    slide.style.minHeight = '0';
+    const box = document.querySelector('.ink-surface').getBoundingClientRect();
+    const x = box.left + box.width * 0.8, y = box.top + box.height * 0.85;
+    const top = document.elementsFromPoint(x, y).find(el => !el.classList.contains('ink-surface'));
+    return top && !!top.closest('.backgrounds');
+  });
+  expect(under, 'the test point is not over bare slide background').toBe(true);
+
+  await page.evaluate(() => {
+    const surface = document.querySelector('.ink-surface');
+    const box = surface.getBoundingClientRect();
+    const y = box.top + box.height * 0.85;
+    const send = (type, at, pointerType, pointerId) => surface.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true, cancelable: true, pointerId, pointerType, isPrimary: true,
+        clientX: box.left + box.width * at, clientY: y
+      }));
+    send('pointerdown', 0.5, 'pen', 1);
+    send('pointerup', 0.5, 'pen', 1);
+    send('pointerdown', 0.8, 'touch', 2);
+    for (let i = 1; i <= 10; i++) send('pointermove', 0.8 - i * 0.05, 'touch', 2);
+    send('pointerup', 0.3, 'touch', 2);
+  });
+
+  await expect.poll(() => page.evaluate(() => Reveal.getIndices().h),
+    { message: 'the swipe did not turn the page' }).toBe(1);
+});
+
 // iPadOS decides for itself what a contact dragging down the page means --
 // scroll it, or leave element fullscreen -- and the only thing that stops it is
 // the touch events being refused. That refusal is what this pins: a pencil
