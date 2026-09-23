@@ -124,3 +124,15 @@ test('ink is placed against the page box it is given', () => {
   assert.equal(bigger.sx, 2);
   assert.equal(bigger.sy, 2);
 });
+
+test('overlapping highlighter strokes are shaded once as a group, not per stroke', () => {
+  const original = classicPdf(1);
+  const stroke = { colour: '#22c55e', path: 'M 80 100 Q 120 140 160 100 Z' };
+  const out = overlay(original, [{ pen: [], highlighter: [stroke, stroke] }],
+                      { width: 1248, height: 702 });
+  const appended = Buffer.from(out.slice(original.length)).toString('latin1');
+  // /ca on its own applies to each fill; only a transparency group merges the
+  // strokes before the 40% multiply, as the live CSS layer does.
+  assert.match(appended, /\/Subtype \/Form[^]*\/Group << \/S \/Transparency/);
+  assert.match(appended, /\/InkHL gs \/\w+ Do/);
+});
