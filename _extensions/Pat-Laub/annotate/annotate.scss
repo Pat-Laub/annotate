@@ -13,8 +13,17 @@ $ink-accent: #2668c7 !default;
 // The ring on the tool in hand, for the tools that draw in no colour of their
 // own. The ones that do -- pen, highlighter, eraser -- set `--ink-ring`.
 $ink-ring: #9b9790 !default;
-$ink-panel-width: 132px !default;
+$ink-panel-width: 180px !default;
+// The buttons in the options tray and the rows under the rail.
 $ink-button-size: 102px !default;
+// The rail is aimed at with a thumb mid-lecture, so it gets bigger targets than
+// the tray: as wide as the rail leaves room for, and as tall as sharing out
+// $ink-panel-height between them makes them -- never less than square.
+$ink-rail-button-width: 150px !default;
+$ink-rail-icon: 76px !default;
+// Of the stage's height. Not all of it: the ends of the side are left for
+// whatever the slide keeps there.
+$ink-panel-height: 75% !default;
 // Matches the icon the stage draws in the corner row the pen joins.
 $ink-launcher-icon: 120px !default;
 
@@ -244,8 +253,17 @@ $ink-launcher-icon: 120px !default;
   display: none;
   flex-direction: column;
   align-items: center;
+  box-sizing: border-box;
   width: $ink-panel-width;
+  min-height: $ink-panel-height;
   padding: 15px 0;
+  // A thumb that rolls a little while it taps would otherwise be read as the
+  // start of a pan, and a cancelled pan leaves no click: the tool the tap was
+  // for is never chosen. Nothing on the rail scrolls, so refuse the gesture.
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   border-radius: 36px;
   background: #fff;
   box-shadow: 0 6px 36px rgba(0, 0, 0, 0.25);
@@ -255,7 +273,8 @@ $ink-launcher-icon: 120px !default;
   }
 
   > hr {
-    width: 66px;
+    flex: none;
+    width: 84px;
     height: 3px;
     margin: 12px 0;
     border: 0;
@@ -301,9 +320,28 @@ $ink-launcher-icon: 120px !default;
   }
 }
 
+// The rail's own buttons, sized for a thumb. They share out whatever height the
+// panel has beyond their square minimum, so a taller stage gives each of them a
+// taller target rather than leaving a gap at the ends. The rows in the tray and
+// the selection actions are not children of the rail and keep the plain size.
+.deck-stage > .ink-panel > .ink-btn,
+.deck-stage > .ink-panel > .ink-swatch {
+  // From a basis of nothing, so a swatch and a tool come out the same height
+  // whatever each holds.
+  flex: 1 1 0;
+  width: $ink-rail-button-width;
+  height: auto;
+  min-height: $ink-button-size;
+
+  svg {
+    width: $ink-rail-icon;
+    height: $ink-rail-icon;
+  }
+}
+
 // The tool in hand wears a ring in the colour it will draw, the way a chosen
-// swatch already does. It is drawn inside the button: the rail is 132px across
-// and a button 102px, so a ring outside it would sit on the panel's edge.
+// swatch already does. It is drawn inside the button: the rail is 180px across
+// and a button 150px, so a ring outside it would sit on the panel's edge.
 // A filled block would also be $ink-accent, which is the Blue swatch exactly --
 // the mark for "this tool" cannot be one of the five colours it draws in.
 .deck-stage .ink-btn.active {
@@ -459,8 +497,8 @@ $ink-launcher-icon: 120px !default;
 // annotate.js, so the dot and its selection ring both just use currentColor.
 .deck-stage .ink-swatch::before {
   content: "";
-  width: 51px;
-  height: 51px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   background: currentColor;
 }
