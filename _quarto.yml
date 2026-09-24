@@ -6,6 +6,7 @@ project:
     - no-pages.qmd
     - closed.qmd
     - controls.qmd
+    - docked.qmd
 
 # The fixture decks the tests measure. `index.qmd` opts into page growth so the
 # page machinery is exercised; `no-pages.qmd` leaves it at its default so the
@@ -13,7 +14,8 @@ project:
 # already in hand; `closed.qmd` is the one that starts with them put away,
 # which is how every deck but a blank pad is opened. `controls.qmd` is the one
 # whose slides hold live controls, for what a pen in hand may take and what it
-# has to leave to the control underneath.
+# has to leave to the control underneath. `docked.qmd` starts its tool rail
+# along the bottom rather than on the right.
 format:
   slide-stage-revealjs:
     theme: [white, fixture.scss, _extensions/Pat-Laub/annotate/annotate.scss]
