@@ -22,10 +22,18 @@ beside it.
 ```yaml
     annotate:
       pages: false      # grow a blank page by navigating past the last slide
+      dock: right       # where the tool rail starts: right, left, top or bottom
 ```
 
 Page growth is what a blank writing pad is for and exactly wrong in a lecture
 deck, so it is off unless a deck asks for it.
+
+`dock` is only where the tool rail starts. Its grip -- the bar at its top, or
+its left end when it lies down -- drags it anywhere on the stage, out of the way
+of whatever is under it: it lies along the top or bottom once dragged nearer
+those than a side, and stands up again beside a side. Pushed at an edge it parks
+there. Where it was left is kept per deck in this browser, under
+`reveal-ink-dock:<deck path>`, and wins over `dock` from then on.
 
 ## Layout
 
