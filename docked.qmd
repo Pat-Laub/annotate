@@ -1,0 +1,20 @@
+---
+pagetitle: Annotate fixture with the tools docked along the bottom
+format:
+  slide-stage-revealjs:
+    annotate:
+      pages: false
+      penWidth: 5
+      delay: 0
+      dock: bottom
+---
+
+## A deck that starts its tools along the bottom {#docked-one}
+
+The other fixtures leave the rail where it starts by default, on the right.
+This one asks for the bottom, which is where it has to start -- lying down --
+until it is dragged somewhere else.
+
+## The last slide {#docked-two}
+
+There is nothing after this.

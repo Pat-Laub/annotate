@@ -175,6 +175,9 @@
   var RULE_SPACING_STORE = 'reveal-ink-rule-spacing';
   var PRESSURE_STORE = 'reveal-ink-pressure';
   var DELAY_STORE = 'reveal-ink-multiplex-delay';
+  // Where the tool rail was last left, per deck: the deck's `dock` option only
+  // says where it starts.
+  var DOCK_STORE = 'reveal-ink-dock:' + location.pathname;
 
   // How long a viewer holds each packet of a stroke before drawing it, in
   // milliseconds, and the settings the more menu offers. See the multiplexing
@@ -2470,9 +2473,134 @@
     requestAnimationFrame(function () { clipQueued = false; clipSurface(); });
   }
 
+  /* ------------------------------ the dock ------------------------------ */
+
+  // The rail can be anywhere on the stage. Where it is is kept as the centre of
+  // it, in fractions of the stage, and whether it lies `across` -- along the
+  // top or bottom -- or stands up beside a side. It is clamped inside the stage
+  // every time it is placed, so pushing it at an edge parks it there.
+  var DOCK_MARGIN = 24;  // $ink-dock-margin
+  var DOCK_STARTS = {
+    right: { x: 1, y: 0.5, across: false },
+    left: { x: 0, y: 0.5, across: false },
+    top: { x: 0.5, y: 0, across: true },
+    bottom: { x: 0.5, y: 1, across: true }
+  };
+  var dock = DOCK_STARTS.right;
+
+  function readDock(start) {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(DOCK_STORE)); } catch (e) { /* unreadable */ }
+    if (saved && isFinite(saved.x) && isFinite(saved.y)) {
+      return { x: +saved.x, y: +saved.y, across: !!saved.across };
+    }
+    return DOCK_STARTS[start] || DOCK_STARTS.right;
+  }
+
+  function saveDock() {
+    try { localStorage.setItem(DOCK_STORE, JSON.stringify(dock)); } catch (e) { /* full or blocked */ }
+  }
+
+  function clamp(v, lo, hi) { return hi < lo ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)); }
+
+  // Sizes are the stage's own, untransformed, which is what `left` and `top`
+  // inside it are in. Nothing can be measured while the rail is hidden, so
+  // this only does anything while it is out.
+  function placePanel() {
+    if (!panel.classList.contains('active')) return;
+    var box = panel.parentNode, sw = box.offsetWidth, sh = box.offsetHeight;
+    panel.style.setProperty('--ink-stage-height', sh + 'px');
+    panel.classList.toggle('ink-across', dock.across);
+    var w = panel.offsetWidth, h = panel.offsetHeight;
+    var cx = clamp(dock.x * sw, DOCK_MARGIN + w / 2, sw - DOCK_MARGIN - w / 2);
+    var cy = clamp(dock.y * sh, DOCK_MARGIN + h / 2, sh - DOCK_MARGIN - h / 2);
+    dock = { x: cx / sw, y: cy / sh, across: dock.across };
+    panel.style.left = (cx - w / 2) + 'px';
+    panel.style.top = (cy - h / 2) + 'px';
+    // What opens beside the rail opens into the stage, on the side with room.
+    panel.dataset.open = dock.across ? (cy > sh / 2 ? 'up' : 'down')
+      : (cx > sw / 2 ? 'left' : 'right');
+  }
+
+  // The grip takes the pointer for itself and keeps it until it is lifted, so
+  // a drag that wanders over the slide is never ink and never reaches a tool.
+  // The rail follows the finger, and lies down once the finger is nearer the
+  // top or bottom than a side -- measured as a share of the stage, so the
+  // middle of a wide stage is not all "side" -- and stands up again the other
+  // way. The margin between the two is so that a drag along the diagonal does
+  // not flip it back and forth.
+  var DOCK_TURN = 0.05;
+
+  function dragPanel(grip) {
+    var drag = null;
+
+    function at(e) {
+      var box = panel.parentNode, r = box.getBoundingClientRect();
+      var k = box.offsetWidth / (r.width || 1);
+      return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k,
+               sw: box.offsetWidth, sh: box.offsetHeight };
+    }
+
+    // Where the grip's middle is, from the rail's middle, as it is laid out now.
+    function gripOffset() {
+      return {
+        x: grip.offsetLeft + grip.offsetWidth / 2 - panel.offsetWidth / 2,
+        y: grip.offsetTop + grip.offsetHeight / 2 - panel.offsetHeight / 2
+      };
+    }
+
+    grip.addEventListener('pointerdown', function (e) {
+      if (drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var p = at(e);
+      drag = { id: e.pointerId, dx: p.x - dock.x * p.sw, dy: p.y - dock.y * p.sh };
+      try { grip.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
+      panel.classList.add('ink-dragging');
+    });
+
+    grip.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var p = at(e);
+      var side = Math.min(p.x, p.sw - p.x) / p.sw;
+      var end = Math.min(p.y, p.sh - p.y) / p.sh;
+      var across = dock.across ? end < side + DOCK_TURN : end < side - DOCK_TURN;
+      if (across !== dock.across) {
+        // Turn it about the finger: the grip comes round to the finger's end.
+        dock = { x: dock.x, y: dock.y, across: across };
+        placePanel();
+        var g = gripOffset();
+        drag.dx = g.x;
+        drag.dy = g.y;
+      }
+      dock = { x: (p.x - drag.dx) / p.sw, y: (p.y - drag.dy) / p.sh, across: dock.across };
+      placePanel();
+    });
+
+    function drop(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      e.stopPropagation();
+      drag = null;
+      panel.classList.remove('ink-dragging');
+      saveDock();
+    }
+    grip.addEventListener('pointerup', drop);
+    grip.addEventListener('pointercancel', drop);
+    grip.addEventListener('lostpointercapture', drop);
+
+    // A touch on the grip is only ever a drag: see the panel's own touchmove
+    // in build() for why the browser is refused it.
+    grip.addEventListener('touchstart', function (e) {
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+  }
+
   function sync() {
     var key = slideKey(), on = !!tool;
     panel.classList.toggle('active', on);
+    placePanel();
     surface.classList.toggle('drawing', on);
     // Now, so the holes are there for a tip already on its way down, and again
     // on the next frame: reveal marks an arrow usable in its own time, and a
@@ -2676,6 +2804,8 @@
     panel = document.createElement('div');
     panel.className = 'ink-panel';
     panel.innerHTML =
+      '<div class="ink-grip" role="button" title="Drag to move the tools" ' +
+        'aria-label="Drag to move the tools"></div>' +
       COLOURS.map(function (c) {
         return '<button class="ink-swatch" data-colour="' + c[1] + '" style="color:' + c[1] +
           '" title="' + c[0] + '"></button>';
@@ -2763,6 +2893,17 @@
 
     var parent = document.querySelector('[data-deck-stage]') || Reveal.getRevealElement();
     parent.appendChild(panel);
+    dragPanel(panel.querySelector('.ink-grip'));
+    // `touch-action: none` keeps the browser from scrolling with a finger that
+    // moves on the panel, but not from taking a quick one as a fling -- a
+    // thumb sliding off a button, or a drag by the grip. The next tap then
+    // goes to stopping that fling instead of to the button under it, and the
+    // tool it was for is not chosen. Nothing here scrolls, so refuse the move
+    // itself, as the ink surface does. Not the touchstart: that would take the
+    // click away from every button.
+    panel.addEventListener('touchmove', function (e) {
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
     // The stage owns the corner row and the full-screen button in it; the pen
     // joins that row rather than opening a second one in the same corner.
     if (toggle) {
@@ -2845,6 +2986,7 @@
     if (opts.penWidth > 0) { WIDTHS.pen = opts.penWidth; widths = readWidths(); }
     if (DELAYS.indexOf(opts.delay) >= 0) { DELAY = opts.delay; playDelay = readDelay(); }
     toolsOpen = opts.tools === 'open';
+    dock = readDock(opts.dock);
     if (toolsOpen && !tool) open(true);
     showChrome(chrome);
 
@@ -2871,6 +3013,9 @@
     Reveal.on('ready', reclip);
     window.addEventListener('resize', reclip);
     window.addEventListener('orientationchange', reclip);
+    // Only a deck without a stage changes size under the rail; the stage is
+    // one authored page however the window is.
+    window.addEventListener('resize', placePanel);
     // The previews are a grid of slides rather than something to write on, so
     // the tools go away for the duration -- and come back as they were. Opening
     // them on the way out hands a pen to a deck that was closed when it went in,
