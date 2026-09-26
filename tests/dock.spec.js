@@ -160,4 +160,39 @@ test.describe('a tap straight after a flick still chooses the tool', () => {
     await page.locator('.ink-panel [data-tool="highlighter"]').tap();
     expect(await inHand(page)).toBe('highlighter');
   });
+
+});
+
+// An Apple Pencil tap is never still: it reports a few moves of a pixel or so
+// between touching down and lifting off, where a finger's tap usually reports
+// none. WebKit drops the click of a tap whose moves were refused, so the pencil
+// could not choose a tool. Chromium clicks regardless, and Playwright cannot
+// drive touch in WebKit, so what is checked is whether the moves are refused.
+test('the rail leaves a pencil tap\'s jitter alone but refuses a drag', async ({ page }) => {
+  await openPad(page);
+  const refused = await page.evaluate(() => {
+    const b = document.querySelector('.ink-panel [data-tool="highlighter"]');
+    const r = b.getBoundingClientRect();
+    const x0 = r.left + r.width / 2, y0 = r.top + r.height / 2;
+    const send = (type, dx, dy) => {
+      const touch = { identifier: 3, target: b, clientX: x0 + dx, clientY: y0 + dy,
+                      touchType: 'stylus', force: 0.3 };
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'changedTouches', { value: [touch] });
+      Object.defineProperty(event, 'touches', { value: type === 'touchend' ? [] : [touch] });
+      Object.defineProperty(event, 'targetTouches', { value: type === 'touchend' ? [] : [touch] });
+      b.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    const tap = [];
+    send('touchstart', 0, 0);
+    tap.push(send('touchmove', 0.5, 0.3), send('touchmove', 1, 1.5), send('touchmove', 2, 1));
+    send('touchend', 2, 1);
+    send('touchstart', 0, 0);
+    const drag = send('touchmove', 40, 30);
+    send('touchend', 40, 30);
+    return { tap, drag };
+  });
+  expect(refused.tap).toEqual([false, false, false]);
+  expect(refused.drag).toBe(true);
 });
