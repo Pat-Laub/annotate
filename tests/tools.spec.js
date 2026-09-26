@@ -264,3 +264,14 @@ test('the tool in hand is ringed in the colour it draws', async ({ page }) => {
   expect(await ring('eraser'), 'the eraser is not its rubber colour').toBe('#f9a8d4');
   expect(await ring('select'), 'the lasso claims a colour it has none of').toBe('');
 });
+
+// The tray names the release in hand, so a reload can be seen to have fetched
+// a new one. It is a label, not a control.
+test('the more tray ends with the annotate version', async ({ page }) => {
+  await openPad(page);
+  await openMore(page);
+  const last = page.locator('.ink-more > :last-child');
+  await expect(last).toHaveClass(/ink-version/);
+  await expect(last).toHaveText(/^Annotate v\d+\.\d+\.\d+$/);
+  expect(await last.evaluate(e => e.tagName)).not.toBe('BUTTON');
+});
