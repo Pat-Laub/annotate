@@ -13,6 +13,11 @@ PREFIX=_extensions/Pat-Laub/annotate
 BRANCH=dist
 TAG=${1:?usage: release-extension.sh <tag>}
 
+version=$(git show "HEAD:$PREFIX/annotate.js" |
+  sed -n "s/^  var VERSION = '\\(.*\\)';/\\1/p")
+[ "annotate-dist-v$version" = "$TAG" ] || {
+  echo "annotate.js says VERSION $version; bump it to match $TAG"; exit 1; }
+
 tree=$(git rev-parse "HEAD:$PREFIX")
 if parent=$(git rev-parse --verify --quiet "$BRANCH"); then
   [ "$(git rev-parse "$parent^{tree}")" = "$tree" ] && {
