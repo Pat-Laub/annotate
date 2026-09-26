@@ -127,6 +127,9 @@
     progress: 0.09, // net displacement over path length: a scribble goes nowhere
     overlap: 0.5,   // bounding-box overlap needed before counting crossings
     crossings: 3,   // crossings with a *single* stroke before it is erased
+    size: 90,       // smallest scribble that erases; below it, a point is being filled in
+    elongated: 5,   // a stroke this many times longer than wide is a line...
+    aligned: 20,    // ...and a scribble within this many degrees of it is going over it
     slack: 4,       // padding on every box, so a straight stroke has an area
     tolerance: 2    // simplification tolerance; ink is sampled far finer than needed
   };
@@ -503,7 +506,7 @@
 
   // The direction of greatest variance: the first principal component, which
   // for a 2x2 covariance matrix is one line of algebra rather than anything
-  // iterative.
+  // iterative. Third is the spread along it against the spread across it.
   function axis(p) {
     var mx = 0, my = 0, xx = 0, xy = 0, yy = 0, i;
     for (i = 0; i < p.length; i++) { mx += p[i][0]; my += p[i][1]; }
@@ -513,7 +516,8 @@
       xx += dx * dx; xy += dx * dy; yy += dy * dy;
     }
     var a = 0.5 * Math.atan2(2 * xy, xx - yy);
-    return [Math.cos(a), Math.sin(a)];
+    var mid = (xx + yy) / 2, off = Math.hypot((xx - yy) / 2, xy);
+    return [Math.cos(a), Math.sin(a), Math.sqrt((mid + off) / Math.max(mid - off, 1e-9))];
   }
 
   // How many times a stroke doubles back along its own long axis. Measuring
@@ -2094,12 +2098,20 @@
     var p = simplify(stroke.p, SCRIBBLE.tolerance);
     if (p.length < 3 || reversals(p) < SCRIBBLE.reversals) return [];
     if (progress(p) > SCRIBBLE.progress) return [];
-    var box = bounds(p);
+    var box = bounds(p), u = axis(p);
+    // Filling in an arrowhead or a point on a plot is a small scribble.
+    var d = SCRIBBLE.slack * 2;
+    if (Math.hypot(box[2] - box[0] - d, box[3] - box[1] - d) < SCRIBBLE.size) return [];
     return strokes().filter(function (s) {
       // Only ink of the same colour drawn with the same tool: highlighting over
       // pen ink, or annotating a diagram in a second colour, is not erasing it.
       if (s === stroke || s.t !== stroke.t || s.c !== stroke.c) return false;
       if (overlap(box, bounds(s.p)) < SCRIBBLE.overlap) return false;
+      // Going back and forth along a line thickens it: an underline gone over
+      // again. Erasing one scribbles across it.
+      var v = axis(thin(s));
+      if (v[2] >= SCRIBBLE.elongated &&
+          Math.abs(u[0] * v[0] + u[1] * v[1]) > Math.cos(SCRIBBLE.aligned * Math.PI / 180)) return false;
       // Counted against this stroke alone. A stroke that crosses ten strokes
       // once each has scribbled over none of them.
       return crossings(p, thin(s), SCRIBBLE.crossings) >= SCRIBBLE.crossings;
