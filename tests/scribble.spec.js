@@ -181,3 +181,27 @@ test('undoing a misfire marks it in the log as one', async ({ page }) => {
   expect(log.length, 'nothing was logged').toBeGreaterThan(0);
   expect(log.every(x => x.u === 1), 'the undo did not mark the erase').toBe(true);
 });
+
+// Scribbles from a 2.5-hour ACTL2131 lecture, labelled against the recording.
+// Each is the stroke a scribble took and the scribble itself, where they were
+// drawn: that deck's page is this one's size. Seven were erases nobody asked
+// for; the rest were meant.
+const LECTURE = require('./support/lecture-scribbles.json');
+
+for (const ev of LECTURE) {
+  const verb = ev.erase ? 'still erases' : 'does not erase';
+  test(`lecture scribble #${ev.event} (${ev.what}) ${verb}`, async ({ page }) => {
+    await openPad(page);
+    await page.evaluate(() => {
+      window.inkMessages = [];
+      document.addEventListener('send', event => window.inkMessages.push(event.content));
+    });
+    await tool(page, ev.tool).click();
+    await drag(page, ev.target, 1);
+    await drag(page, ev.scribble, 1);
+
+    const rubs = await page.evaluate(() =>
+      window.inkMessages.filter(m => m.a === 'rub').length);
+    expect(rubs, ev.erase ? 'the scribble did not erase' : 'the scribble erased').toBe(ev.erase ? 1 : 0);
+  });
+}
