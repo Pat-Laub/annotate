@@ -1,6 +1,7 @@
 node_modules/
 .quarto/
 test-results/
+build/
 playwright-report/
 .DS_Store
 docs/
