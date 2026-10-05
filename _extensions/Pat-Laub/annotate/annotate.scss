@@ -810,18 +810,18 @@ $ink-launcher-icon: 120px !default;
   z-index: 61;
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 12px 18px 12px 36px;
+  gap: 0.6em;
+  padding: 0.3em 0.45em 0.3em 0.9em;
   border-radius: 2997px;
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
-  font-size: 39px;
+  font-size: calc(var(--r-main-font-size, 39px) * var(--chip-scale, 1));
   font-family: sans-serif;
 
   &[hidden] { display: none; }
 
   button {
-    padding: 6px 30px;
+    padding: 0.15em 0.75em;
     border: 0;
     border-radius: 2997px;
     background: #fff;
