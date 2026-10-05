@@ -24,7 +24,7 @@
 (function () {
   if (!window.perfectFreehand) return;
   // The release this is; release-extension.sh refuses a tag that disagrees.
-  var VERSION = '0.41.2';
+  var VERSION = '0.41.3';
   var getStroke = perfectFreehand.getStroke;
 
   /* ---------------------------- configuration ---------------------------- */
