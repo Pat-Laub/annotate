@@ -169,8 +169,16 @@ window.RevealMultiplex = {
 				back.addEventListener( 'click', follow );
 				chip.appendChild( back );
 				document.body.appendChild( chip );
+				window.addEventListener( 'resize', scaleChip );
 			}
 			chip.hidden = false;
+			scaleChip();
+		}
+
+		// Match the slide's body text, whatever is scaling the slides.
+		function scaleChip() {
+			var r = deck.getSlidesElement().getBoundingClientRect(), c = deck.getConfig();
+			chip.style.setProperty( '--chip-scale', Math.max( r.width, r.height ) / Math.max( c.width, c.height ) );
 		}
 
 		function follow() {
