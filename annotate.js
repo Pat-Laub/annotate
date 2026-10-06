@@ -24,7 +24,7 @@
 (function () {
   if (!window.perfectFreehand) return;
   // The release this is; release-extension.sh refuses a tag that disagrees.
-  var VERSION = '0.42.1';
+  var VERSION = '0.42.2';
   var getStroke = perfectFreehand.getStroke;
 
   /* ---------------------------- configuration ---------------------------- */
@@ -254,7 +254,7 @@
   var lastRub = null;     // the erase an undo would reverse, so a misfire can be marked as one
   var laser = false;         // the mouse leaves a fading trail; see the laser section
   var laserT0 = 0, laserLast = 0;  // when the sweep in hand began, and last moved
-  var beam = [];             // trail points: [x, y, when shown, starts a sweep]
+  var beam = [];             // trail points: [x, y, when shown, starts a sweep, width]
   var beamOrigin = null;     // local time the sweep being shown counts from
   var laserLayer, laserFrame = 0;
   var diagnostics = [];      // bounded, session-only input trace; exported with ink
@@ -1485,7 +1485,7 @@
     if (t - laserLast > LASER.gap) laserT0 = t;
     laserLast = t;
     var d = Math.round(t - laserT0);
-    var msg = { a: 'laser', p: points(e).map(function (q) { return [round(q[0]), round(q[1]), d]; }) };
+    var msg = { a: 'laser', w: widths.pen, p: points(e).map(function (q) { return [round(q[0]), round(q[1]), d]; }) };
     send(msg);
     receiveLaser(msg, true);
   }
@@ -1495,10 +1495,10 @@
   function receiveLaser(msg, local) {
     var p = msg.p || [];
     if (!p.length) return;
-    var t = now(), first = p[0][2];
+    var t = now(), first = p[0][2], w = msg.w > 0 ? msg.w : widths.pen;
     var fresh = beamOrigin === null || first === 0 || beamOrigin + first < t - LASER.gap;
     if (fresh) beamOrigin = t + (local ? 0 : playDelay) - first;
-    p.forEach(function (q, i) { beam.push([q[0], q[1], beamOrigin + q[2], fresh && i === 0]); });
+    p.forEach(function (q, i) { beam.push([q[0], q[1], beamOrigin + q[2], fresh && i === 0, w]); });
     if (!laserFrame) laserFrame = requestAnimationFrame(drawLaser);
   }
 
@@ -1511,10 +1511,11 @@
     beam = beam.filter(function (b) { return b[2] > t - LASER.fade; });
     var shown = beam.filter(function (b) { return b[2] <= t; });
     for (var i = 0, from = 0; i <= shown.length; i++) {
-      if (i < shown.length && (i === from || !shown[i][3])) continue;
+      if (i === from || (i < shown.length && !shown[i][3])) continue;
+      var size = shown[from][4] / 2;
       var pts = getStroke(shown.slice(from, i).map(function (b) {
         return [b[0], b[1], 1 - (t - b[2]) / LASER.fade];
-      }), { size: W / 160, thinning: 1, smoothing: 0.5, streamline: 0.3, simulatePressure: false, last: true });
+      }), { size: size, thinning: 1, smoothing: 0.5, streamline: 0.3, simulatePressure: false, last: true });
       from = i;
       if (!pts.length) continue;
       d.push('M', round(pts[0][0]), round(pts[0][1]), 'Q');
