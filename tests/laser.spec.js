@@ -86,3 +86,30 @@ test('the trail is drawn as one shape', async ({ page }) => {
   await expect(lit(page).first()).toBeAttached();
   expect(await page.locator('.ink-laser > *').count()).toBe(1);
 });
+
+// The pen's stroke width is the laser's, and it travels with the trail so a
+// viewer draws it the presenter's width rather than its own.
+test('the laser is as wide as the pen, and widens with it', async ({ page }) => {
+  await open(page);
+  await listen(page);
+  await page.keyboard.press('l');
+
+  const sweepWidth = async () => {
+    await page.evaluate(() => { window.channelMessages = []; });
+    await sweep(page);
+    await expect(lit(page).first()).toBeAttached();
+    const height = await page.locator('.ink-laser path').evaluate(el => el.getBBox().height);
+    const sent = await page.evaluate(() => window.channelMessages.find(m => m.a === 'laser'));
+    await expect(lit(page)).toHaveCount(0, { timeout: 3000 });
+    return { height, w: sent.w };
+  };
+
+  const thin = await sweepWidth();
+  expect(thin.w).toBeGreaterThan(0);
+  expect(thin.height).toBeLessThanOrEqual(thin.w * 1.2);
+
+  await page.keyboard.press(']');
+  const thick = await sweepWidth();
+  expect(thick.w).toBeGreaterThan(thin.w);
+  expect(thick.height).toBeGreaterThan(thin.height);
+});
