@@ -87,9 +87,9 @@ test('the trail is drawn as one shape', async ({ page }) => {
   expect(await page.locator('.ink-laser > *').count()).toBe(1);
 });
 
-// The pen's stroke width is the laser's, and it travels with the trail so a
-// viewer draws it the presenter's width rather than its own.
-test('the laser is as wide as the pen, and widens with it', async ({ page }) => {
+// The laser has its own width, not the pen's, and it travels with the trail
+// so a viewer draws it the presenter's width rather than its own.
+test('the laser is its own width, and the pen does not change it', async ({ page }) => {
   await open(page);
   await listen(page);
   await page.keyboard.press('t');
@@ -104,14 +104,13 @@ test('the laser is as wide as the pen, and widens with it', async ({ page }) => 
     return { height, w: sent.w };
   };
 
-  const thin = await sweepWidth();
-  expect(thin.w).toBeGreaterThan(0);
-  expect(thin.height).toBeLessThanOrEqual(thin.w * 1.2);
+  const before = await sweepWidth();
+  expect(before.w).toBe(15);
+  expect(before.height).toBeLessThanOrEqual(before.w * 1.2);
 
   await page.keyboard.press(']');
-  const thick = await sweepWidth();
-  expect(thick.w).toBeGreaterThan(thin.w);
-  expect(thick.height).toBeGreaterThan(thin.height);
+  const after = await sweepWidth();
+  expect(after.w).toBe(15);
 });
 
 // L is reveal's vim-style right in the overview, so it must stay navigation.
