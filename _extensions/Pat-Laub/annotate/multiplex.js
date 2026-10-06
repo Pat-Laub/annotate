@@ -152,6 +152,16 @@ window.RevealMultiplex = {
 		// date rather than replaying the interval.
 		var detached = false, missed = null, chip = null;
 
+		// Element fullscreen paints only the fullscreen element's subtree, so
+		// the overlays follow it in and back out.
+		var OVERLAYS = '.multiplex-detached, .multiplex-notice, .multiplex-mode, .multiplex-latency';
+		function layer() { return document.fullscreenElement || document.webkitFullscreenElement || document.body; }
+		function relayer() {
+			document.querySelectorAll( OVERLAYS ).forEach( function ( el ) { layer().appendChild( el ); } );
+		}
+		document.addEventListener( 'fullscreenchange', relayer );
+		document.addEventListener( 'webkitfullscreenchange', relayer );
+
 		if ( role === 'audience' ) deck.on( 'ready', function () {
 			deck.on( 'slidechanged', function () { if ( !applying ) detach(); } );
 		} );
@@ -168,7 +178,7 @@ window.RevealMultiplex = {
 				back.textContent = 'Return live';
 				back.addEventListener( 'click', follow );
 				chip.appendChild( back );
-				document.body.appendChild( chip );
+				layer().appendChild( chip );
 				window.addEventListener( 'resize', scaleChip );
 			}
 			chip.hidden = false;
@@ -334,8 +344,9 @@ window.RevealMultiplex = {
 			pill.style.cssText = 'position:fixed;left:8px;top:8px;z-index:60;padding:3px 9px;' +
 				'border-radius:999px;background:rgba(0,0,0,.6);color:#fff;font:12px/1.4 ui-monospace,monospace;' +
 				'pointer-events:none;white-space:pre';
+			pill.className = 'multiplex-latency';
 			pill.textContent = 'latency …';
-			document.body.appendChild( pill );
+			layer().appendChild( pill );
 
 			socket.on( 'state', function ( m ) {
 				if ( !m || !m.echo || !pending || m.probe !== pending ) return;
@@ -367,7 +378,7 @@ window.RevealMultiplex = {
 			var caption = document.createElement( 'div' );
 			caption.className = 'multiplex-mode';
 			caption.textContent = text;
-			document.body.appendChild( caption );
+			layer().appendChild( caption );
 			setTimeout( function () { caption.remove(); }, MODE_MS );
 		}
 
@@ -376,7 +387,7 @@ window.RevealMultiplex = {
 			if ( !box ) {
 				box = document.createElement( 'div' );
 				box.className = 'multiplex-notice';
-				document.body.appendChild( box );
+				layer().appendChild( box );
 			}
 			box.textContent = text;
 			box.style.display = 'block';
