@@ -186,6 +186,21 @@ test('the chip is set at the size of the slide text', async ({ page }) => {
   expect(sizes.chip).toBeLessThan(sizes.text * 1.1);
 });
 
+test('the chip still shows in full screen', async ({ page }) => {
+  await openProjected(page);
+  await page.keyboard.press('f');
+  await page.waitForFunction(() => document.fullscreenElement);
+  await page.keyboard.press('ArrowRight');
+  await expect(chip(page)).toBeVisible();
+
+  // A box outside the fullscreen element is laid out but never painted.
+  const hit = await page.evaluate(() => {
+    const c = document.querySelector('.multiplex-detached'), r = c.getBoundingClientRect();
+    return c.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+  });
+  expect(hit, 'the chip is hidden behind the fullscreen element').toBe(true);
+});
+
 test('a window that is following says nothing', async ({ page }) => {
   await openProjected(page);
   await tell(page, 1);
