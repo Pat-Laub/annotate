@@ -36,7 +36,7 @@
 
   // How wide each tool draws, in slide coordinates. These defaults are tuned
   // for handwriting at the deck's corrected, browser-independent scale.
-  var WIDTHS = { pen: 12.3, highlighter: 86 };
+  var WIDTHS = { pen: 5, highlighter: 86 };
 
   // The rest of what perfect-freehand needs, which is what gives a stroke its
   // shape rather than its weight: how far pressure narrows it, how much the
@@ -1472,7 +1472,7 @@
   // moves at the speed of the hand rather than of the wire. It never enters
   // `ink`, so nothing saved, exported or printed sees it; the recorder hears it
   // like any other message.
-  var LASER = { fade: 600, gap: 250, colour: '#d94827' };
+  var LASER = { fade: 600, gap: 250, colour: '#d94827', width: 15 };
 
   function toggleLaser() {
     laser = !laser;
@@ -1485,7 +1485,7 @@
     if (t - laserLast > LASER.gap) laserT0 = t;
     laserLast = t;
     var d = Math.round(t - laserT0);
-    var msg = { a: 'laser', w: widths.pen, p: points(e).map(function (q) { return [round(q[0]), round(q[1]), d]; }) };
+    var msg = { a: 'laser', w: LASER.width, p: points(e).map(function (q) { return [round(q[0]), round(q[1]), d]; }) };
     send(msg);
     receiveLaser(msg, true);
   }
@@ -1495,7 +1495,7 @@
   function receiveLaser(msg, local) {
     var p = msg.p || [];
     if (!p.length) return;
-    var t = now(), first = p[0][2], w = msg.w > 0 ? msg.w : widths.pen;
+    var t = now(), first = p[0][2], w = msg.w > 0 ? msg.w : LASER.width;
     var fresh = beamOrigin === null || first === 0 || beamOrigin + first < t - LASER.gap;
     if (fresh) beamOrigin = t + (local ? 0 : playDelay) - first;
     p.forEach(function (q, i) { beam.push([q[0], q[1], beamOrigin + q[2], fresh && i === 0, w]); });
@@ -3100,6 +3100,7 @@
     // Re-read rather than assign: what the deck sets is the default, and both
     // readers prefer a value this browser has already stored.
     if (opts.penWidth > 0) { WIDTHS.pen = opts.penWidth; widths = readWidths(); }
+    if (opts.laserWidth > 0) LASER.width = opts.laserWidth;
     if (DELAYS.indexOf(opts.delay) >= 0) { DELAY = opts.delay; playDelay = readDelay(); }
     toolsOpen = opts.tools === 'open';
     dock = readDock(opts.dock);
