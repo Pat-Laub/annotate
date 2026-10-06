@@ -24,7 +24,7 @@
 (function () {
   if (!window.perfectFreehand) return;
   // The release this is; release-extension.sh refuses a tag that disagrees.
-  var VERSION = '0.41.4';
+  var VERSION = '0.41.5';
   var getStroke = perfectFreehand.getStroke;
 
   /* ---------------------------- configuration ---------------------------- */
@@ -1248,7 +1248,7 @@
     textarea.placeholder = 'Type text';
     textarea.setAttribute('aria-label', target ? 'Edit text box' : 'New text box');
     textarea.spellcheck = true;
-    document.body.appendChild(textarea);
+    (document.fullscreenElement || document.webkitFullscreenElement || document.body).appendChild(textarea);
     editing = { key: slideKey(), target: target, draft: draft, el: textarea };
     layoutTextEditor();
     window.addEventListener('resize', layoutTextEditor);
