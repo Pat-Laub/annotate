@@ -118,12 +118,6 @@ $ink-launcher-icon: 120px !default;
   z-index: 15;
 
   path {
-    fill: none;
-    stroke: currentColor;
-    stroke-linecap: round;
-  }
-
-  circle {
     fill: currentColor;
   }
 }
