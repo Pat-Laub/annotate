@@ -1248,7 +1248,7 @@
     textarea.placeholder = 'Type text';
     textarea.setAttribute('aria-label', target ? 'Edit text box' : 'New text box');
     textarea.spellcheck = true;
-    document.body.appendChild(textarea);
+    (document.fullscreenElement || document.webkitFullscreenElement || document.body).appendChild(textarea);
     editing = { key: slideKey(), target: target, draft: draft, el: textarea };
     layoutTextEditor();
     window.addEventListener('resize', layoutTextEditor);
