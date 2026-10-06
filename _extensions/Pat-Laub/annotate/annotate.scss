@@ -110,6 +110,24 @@ $ink-launcher-icon: 120px !default;
   }
 }
 
+.deck-stage .ink-laser {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 15;
+
+  path {
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+  }
+
+  circle {
+    fill: currentColor;
+  }
+}
+
 .deck-stage .ink-selection-layer {
   position: absolute;
   // Same box as the ink layers: it shares their viewBox, so anything else
@@ -654,6 +672,7 @@ $ink-launcher-icon: 120px !default;
   .ink-layer,
   .ink-overview-layer,
   .ink-selection-layer,
+  .ink-laser,
   .ink-surface,
   .ink-text-editor {
     display: none !important;
@@ -668,6 +687,7 @@ $ink-launcher-icon: 120px !default;
   .ink-guide,
   .ink-layer,
   .ink-selection-layer,
+  .ink-laser,
   .ink-surface,
   .ink-text-editor {
     display: none !important;
@@ -732,6 +752,7 @@ $ink-launcher-icon: 120px !default;
   .ink-layer,
   .ink-overview-layer,
   .ink-selection-layer,
+  .ink-laser,
   .ink-surface,
   .ink-text-editor {
     display: none !important;
