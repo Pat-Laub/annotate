@@ -24,7 +24,7 @@
 (function () {
   if (!window.perfectFreehand) return;
   // The release this is; release-extension.sh refuses a tag that disagrees.
-  var VERSION = '0.42.2';
+  var VERSION = '0.42.3';
   var getStroke = perfectFreehand.getStroke;
 
   /* ---------------------------- configuration ---------------------------- */
@@ -2950,7 +2950,7 @@
           'fill="none" stroke="currentColor" stroke-width="1.5" role="img"><path/></svg>' +
           button('data-act', 'rules-farther', 'Move ruled lines farther apart', 'thicker') +
         '</div>' +
-        option('data-act', 'laser', 'Laser pointer', 'A fading trail behind the mouse (L)') +
+        option('data-act', 'laser', 'Laser pointer', 'A fading trail behind the mouse (t)') +
         option('data-act', 'pressure', 'Pencil pressure', 'Apple Pencil pressure changes stroke width') +
         '<div class="ink-more-title ink-rule-title">Replay delay</div>' +
         '<div class="ink-delay-row">' +
@@ -3161,7 +3161,7 @@
       toggleRules
     );
     Reveal.addKeyBinding(
-      { keyCode: 76, key: 'L', description: 'Toggle the laser pointer' },
+      { keyCode: 84, key: 'T', description: 'Toggle the laser pointer' },
       toggleLaser
     );
     window.addEventListener('pointermove', sweepLaser, true);
