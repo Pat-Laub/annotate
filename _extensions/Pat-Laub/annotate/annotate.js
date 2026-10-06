@@ -1502,29 +1502,34 @@
     if (!laserFrame) laserFrame = requestAnimationFrame(drawLaser);
   }
 
+  // One filled outline per sweep, all in one path, narrowing to nothing at the
+  // tail. Translucent segments overlap at every joint and paint it twice, which
+  // strung the trail into beads, one per sample.
   function drawLaser() {
     laserFrame = 0;
-    var t = now(), w = W / 250;
+    var t = now(), d = [];
     beam = beam.filter(function (b) { return b[2] > t - LASER.fade; });
     var shown = beam.filter(function (b) { return b[2] <= t; });
-    while (laserLayer.firstChild) laserLayer.removeChild(laserLayer.firstChild);
-    for (var i = 1; i < shown.length; i++) {
-      if (shown[i][3]) continue;
-      var a = shown[i - 1], b = shown[i], left = 1 - (t - b[2]) / LASER.fade;
-      var seg = document.createElementNS(SVG_NS, 'path');
-      seg.setAttribute('d', 'M' + a[0] + ' ' + a[1] + 'L' + b[0] + ' ' + b[1]);
-      seg.setAttribute('stroke-width', w * (0.3 + 0.7 * left));
-      seg.setAttribute('stroke-opacity', left);
-      laserLayer.appendChild(seg);
+    for (var i = 0, from = 0; i <= shown.length; i++) {
+      if (i < shown.length && (i === from || !shown[i][3])) continue;
+      var pts = getStroke(shown.slice(from, i).map(function (b) {
+        return [b[0], b[1], 1 - (t - b[2]) / LASER.fade];
+      }), { size: W / 160, thinning: 1, smoothing: 0.5, streamline: 0.3, simulatePressure: false, last: true });
+      from = i;
+      if (!pts.length) continue;
+      d.push('M', round(pts[0][0]), round(pts[0][1]), 'Q');
+      for (var k = 0; k < pts.length; k++) {
+        var p = pts[k], q = pts[(k + 1) % pts.length];
+        d.push(round(p[0]), round(p[1]), round((p[0] + q[0]) / 2), round((p[1] + q[1]) / 2));
+      }
+      d.push('Z');
     }
-    var head = shown[shown.length - 1];
-    if (head) {
-      var dot = document.createElementNS(SVG_NS, 'circle');
-      dot.setAttribute('cx', head[0]);
-      dot.setAttribute('cy', head[1]);
-      dot.setAttribute('r', w * 0.8);
-      dot.setAttribute('fill-opacity', 1 - (t - head[2]) / LASER.fade);
-      laserLayer.appendChild(dot);
+    var el = laserLayer.firstChild;
+    if (!d.length) {
+      if (el) laserLayer.removeChild(el);
+    } else {
+      if (!el) el = laserLayer.appendChild(document.createElementNS(SVG_NS, 'path'));
+      el.setAttribute('d', d.join(' '));
     }
     if (beam.length) laserFrame = requestAnimationFrame(drawLaser);
   }
