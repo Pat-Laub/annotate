@@ -252,6 +252,11 @@
   var sessionStarted = Date.now();
   var erased = MUX === 'viewer' ? {} : readErased();   // slide key -> strokes rubbed out, in the order they went
   var lastRub = null;     // the erase an undo would reverse, so a misfire can be marked as one
+  var laser = false;         // the mouse leaves a fading trail; see the laser section
+  var laserT0 = 0, laserLast = 0;  // when the sweep in hand began, and last moved
+  var beam = [];             // trail points: [x, y, when shown, starts a sweep]
+  var beamOrigin = null;     // local time the sweep being shown counts from
+  var laserLayer, laserFrame = 0;
   var diagnostics = [];      // bounded, session-only input trace; exported with ink
   var W, H, slides, surface, panel, picker, toggle, guide, rulesPath, selectionLayer, selectionBox, saveTimer;
   var storageFull = false;   // the last save hit the origin's quota
@@ -1399,6 +1404,8 @@
         fading.add(scribbling.stroke);
         if (scribbling.trail) scribbling.trail.fade();
       }
+    } else if (msg.a === 'laser') {
+      receiveLaser(msg, local);
     } else if (incoming[msg.i]) {
       incoming[msg.i].waiting.push({ p: msg.p, x: msg.x || 0, d: msg.d || 0, last: msg.a === 'end' });
       play(incoming[msg.i]);
@@ -1455,6 +1462,71 @@
     if (fading.has(arrival.stroke)) arrival.trail.fade();
     if (unfinished) arrival.trail.draw();
     else arrival.trail.close();
+  }
+
+  /* -------------------------------- laser -------------------------------- */
+
+  // A pointer that leaves a short trail behind and keeps none of it. A sweep
+  // travels the way a stroke in progress does, as points with offsets from when
+  // it began, and a viewer plays them back from a zero of its own, so the trail
+  // moves at the speed of the hand rather than of the wire. It never enters
+  // `ink`, so nothing saved, exported or printed sees it; the recorder hears it
+  // like any other message.
+  var LASER = { fade: 600, gap: 250, colour: '#d94827' };
+
+  function toggleLaser() {
+    laser = !laser;
+    sync();
+  }
+
+  function sweepLaser(e) {
+    if (!laser || MUX === 'viewer' || e.pointerType === 'touch' || activePointer !== null) return;
+    var t = now();
+    if (t - laserLast > LASER.gap) laserT0 = t;
+    laserLast = t;
+    var d = Math.round(t - laserT0);
+    var msg = { a: 'laser', p: points(e).map(function (q) { return [round(q[0]), round(q[1]), d]; }) };
+    send(msg);
+    receiveLaser(msg, true);
+  }
+
+  // A packet that starts a sweep, or arrives too late to be played in its
+  // turn, fixes a new zero; the rest are shown at their offsets from it.
+  function receiveLaser(msg, local) {
+    var p = msg.p || [];
+    if (!p.length) return;
+    var t = now(), first = p[0][2];
+    var fresh = beamOrigin === null || first === 0 || beamOrigin + first < t - LASER.gap;
+    if (fresh) beamOrigin = t + (local ? 0 : playDelay) - first;
+    p.forEach(function (q, i) { beam.push([q[0], q[1], beamOrigin + q[2], fresh && i === 0]); });
+    if (!laserFrame) laserFrame = requestAnimationFrame(drawLaser);
+  }
+
+  function drawLaser() {
+    laserFrame = 0;
+    var t = now(), w = W / 250;
+    beam = beam.filter(function (b) { return b[2] > t - LASER.fade; });
+    var shown = beam.filter(function (b) { return b[2] <= t; });
+    while (laserLayer.firstChild) laserLayer.removeChild(laserLayer.firstChild);
+    for (var i = 1; i < shown.length; i++) {
+      if (shown[i][3]) continue;
+      var a = shown[i - 1], b = shown[i], left = 1 - (t - b[2]) / LASER.fade;
+      var seg = document.createElementNS(SVG_NS, 'path');
+      seg.setAttribute('d', 'M' + a[0] + ' ' + a[1] + 'L' + b[0] + ' ' + b[1]);
+      seg.setAttribute('stroke-width', w * (0.3 + 0.7 * left));
+      seg.setAttribute('stroke-opacity', left);
+      laserLayer.appendChild(seg);
+    }
+    var head = shown[shown.length - 1];
+    if (head) {
+      var dot = document.createElementNS(SVG_NS, 'circle');
+      dot.setAttribute('cx', head[0]);
+      dot.setAttribute('cy', head[1]);
+      dot.setAttribute('r', w * 0.8);
+      dot.setAttribute('fill-opacity', 1 - (t - head[2]) / LASER.fade);
+      laserLayer.appendChild(dot);
+    }
+    if (beam.length) laserFrame = requestAnimationFrame(drawLaser);
   }
 
   /* ------------------------------- drawing ------------------------------- */
@@ -2187,6 +2259,7 @@
     copy: '<rect x="8" y="8" width="11" height="11" rx="1.5"/><path d="M16 8V5H5v11h3"/>',
     paste: '<path d="M9 6h6v3H9z"/><path d="M8 7H6v13h12V7h-2"/><path d="M9 13h6M9 17h5"/>',
     continue: '<rect x="3.5" y="5" width="8" height="12" rx="1"/><rect x="13" y="7" width="7.5" height="12" rx="1"/><path d="M8 12h8M13 9l3 3-3 3"/>',
+    laser: '<circle cx="17" cy="7" r="2.5"/><path d="M4 20c3-2 5-6 8-8.5s3.5-2 3.5-2"/>',
     pressure: '<path d="M4 16c2.2-5.3 4.7-8 7.5-8 3.2 0 5.8 3.3 8.5 10"/><circle cx="11.5" cy="8" r="2.2"/><path d="M4 20h16"/>',
     thinner: '<path d="M5 12h14"/>',
     thicker: '<path d="M12 5v14"/><path d="M5 12h14"/>',
@@ -2671,6 +2744,7 @@
       'M8 ' + (11 - gap) + 'H44 M8 11H44 M8 ' + (11 + gap) + 'H44');
     rulePreview.setAttribute('aria-label', 'Rule spacing: ' + ruleSpacing + ' slide units');
     act('pressure').classList.toggle('active', pressureEnabled);
+    act('laser').classList.toggle('active', laser);
     // A viewer is told the delay rather than choosing it, and shows it greyed.
     var mine = MUX !== 'viewer';
     panel.querySelector('.ink-delay text').textContent = playDelay + ' ms';
@@ -2704,6 +2778,12 @@
     drawRules();
     guide.appendChild(rulesPath);
     slides.insertBefore(guide, slides.firstChild);
+
+    laserLayer = document.createElementNS(SVG_NS, 'svg');
+    laserLayer.setAttribute('class', 'ink-laser');
+    laserLayer.setAttribute('viewBox', view.join(' '));
+    laserLayer.style.color = LASER.colour;
+    slides.insertBefore(laserLayer, slides.firstChild);
 
     selectionLayer = document.createElementNS(SVG_NS, 'svg');
     selectionLayer.setAttribute('class', 'ink-selection-layer');
@@ -2864,6 +2944,7 @@
           'fill="none" stroke="currentColor" stroke-width="1.5" role="img"><path/></svg>' +
           button('data-act', 'rules-farther', 'Move ruled lines farther apart', 'thicker') +
         '</div>' +
+        option('data-act', 'laser', 'Laser pointer', 'A fading trail behind the mouse (L)') +
         option('data-act', 'pressure', 'Pencil pressure', 'Apple Pencil pressure changes stroke width') +
         '<div class="ink-more-title ink-rule-title">Replay delay</div>' +
         '<div class="ink-delay-row">' +
@@ -2983,6 +3064,8 @@
         resizeRules(b.dataset.act === 'rules-farther');
       } else if (b.dataset.act === 'delay-less' || b.dataset.act === 'delay-more') {
         stepDelay(b.dataset.act === 'delay-more');
+      } else if (b.dataset.act === 'laser') {
+        toggleLaser();
       } else if (b.dataset.act === 'pressure') {
         togglePressure();
       } else if (b.dataset.act === 'more') {
@@ -3071,6 +3154,11 @@
       { keyCode: 82, key: 'R', description: 'Show/hide ruled writing guides' },
       toggleRules
     );
+    Reveal.addKeyBinding(
+      { keyCode: 76, key: 'L', description: 'Toggle the laser pointer' },
+      toggleLaser
+    );
+    window.addEventListener('pointermove', sweepLaser, true);
     Reveal.addKeyBinding(
       { keyCode: 67, key: 'C', description: 'Show/hide the corner buttons' },
       function () { showChrome(!chrome); }
