@@ -29,6 +29,25 @@ test('a text box can be typed and kept', async ({ page }) => {
   await expect(page.locator('svg.ink-layer.ink-text')).toContainText('Hello pad');
 });
 
+test('the text box shows in full screen', async ({ page }) => {
+  await openPad(page);
+  await page.keyboard.press('f');
+  await page.waitForFunction(() => document.fullscreenElement);
+  await tool(page, 'text').click();
+
+  const box = await page.locator('.ink-surface').boundingBox();
+  await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.35);
+  const editor = page.locator('.ink-text-editor');
+  await expect(editor).toBeVisible();
+
+  // A box outside the fullscreen element is laid out but never painted.
+  const hit = await editor.evaluate(el => {
+    const r = el.getBoundingClientRect();
+    return el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+  });
+  expect(hit, 'the text box is hidden behind the fullscreen element').toBe(true);
+});
+
 test('the lasso selects a stroke and the selection can be moved', async ({ page }) => {
   await openPad(page);
   await drawStroke(page, [[0.35, 0.45], [0.45, 0.5], [0.55, 0.45]]);
