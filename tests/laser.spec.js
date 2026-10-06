@@ -75,3 +75,14 @@ test('the laser leaves no ink behind', async ({ page }) => {
   expect(stored).not.toMatch(/laser/);
   await expect(page.locator('.ink-layer path')).toHaveCount(0);
 });
+
+// Separate translucent segments overlap at every joint, and each overlap paints
+// twice: the trail came out as a string of beads, one per mouse sample.
+test('the trail is drawn as one shape', async ({ page }) => {
+  await open(page);
+  await page.keyboard.press('l');
+  await sweep(page);
+
+  await expect(lit(page).first()).toBeAttached();
+  expect(await page.locator('.ink-laser > *').count()).toBe(1);
+});
