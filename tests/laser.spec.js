@@ -29,7 +29,7 @@ const lit = page => page.locator('.ink-laser path, .ink-laser circle');
 test('the laser follows the mouse, goes out on the wire, and fades', async ({ page }) => {
   await open(page);
   await listen(page);
-  await page.keyboard.press('l');
+  await page.keyboard.press('t');
   await sweep(page);
 
   await expect(lit(page).first(), 'no trail was drawn').toBeAttached();
@@ -43,8 +43,8 @@ test('the laser is off until asked for, and goes off again', async ({ page }) =>
   await open(page);
   await listen(page);
   await sweep(page);
-  await page.keyboard.press('l');
-  await page.keyboard.press('l');
+  await page.keyboard.press('t');
+  await page.keyboard.press('t');
   await sweep(page);
 
   await page.waitForTimeout(100);
@@ -66,7 +66,7 @@ test('a window following the channel draws the laser it is sent', async ({ page 
 
 test('the laser leaves no ink behind', async ({ page }) => {
   await open(page);
-  await page.keyboard.press('l');
+  await page.keyboard.press('t');
   await sweep(page);
   await expect(lit(page)).toHaveCount(0, { timeout: 3000 });
 
@@ -80,7 +80,7 @@ test('the laser leaves no ink behind', async ({ page }) => {
 // twice: the trail came out as a string of beads, one per mouse sample.
 test('the trail is drawn as one shape', async ({ page }) => {
   await open(page);
-  await page.keyboard.press('l');
+  await page.keyboard.press('t');
   await sweep(page);
 
   await expect(lit(page).first()).toBeAttached();
@@ -92,7 +92,7 @@ test('the trail is drawn as one shape', async ({ page }) => {
 test('the laser is as wide as the pen, and widens with it', async ({ page }) => {
   await open(page);
   await listen(page);
-  await page.keyboard.press('l');
+  await page.keyboard.press('t');
 
   const sweepWidth = async () => {
     await page.evaluate(() => { window.channelMessages = []; });
@@ -112,4 +112,15 @@ test('the laser is as wide as the pen, and widens with it', async ({ page }) => 
   const thick = await sweepWidth();
   expect(thick.w).toBeGreaterThan(thin.w);
   expect(thick.height).toBeGreaterThan(thin.height);
+});
+
+// L is reveal's vim-style right in the overview, so it must stay navigation.
+test('L does not turn the laser on', async ({ page }) => {
+  await open(page);
+  await listen(page);
+  await page.keyboard.press('l');
+  await sweep(page);
+
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.channelMessages.filter(m => m.a === 'laser').length)).toBe(0);
 });
