@@ -123,3 +123,38 @@ test('L does not turn the laser on', async ({ page }) => {
   await page.waitForTimeout(100);
   expect(await page.evaluate(() => window.channelMessages.filter(m => m.a === 'laser').length)).toBe(0);
 });
+
+const deliver = (page, packets) => page.evaluate(packets => {
+  for (const p of packets) {
+    const e = new CustomEvent('received');
+    e.content = { a: 'laser', w: 15, p: [p] };
+    document.dispatchEvent(e);
+  }
+}, packets);
+
+// A relay stall held a trail back for seconds and then delivered it at once;
+// the viewer replayed it at the pen's pace, seconds behind the hand.
+test('a trail held up on the wire is dropped, not replayed late', async ({ page }) => {
+  await open(page);
+  await deliver(page, [[400, 300, 0]]);
+  await page.waitForTimeout(1000);
+  const burst = [];
+  for (let d = 50; d <= 1050; d += 16) burst.push([400 + d / 2, 300, d]);
+  await deliver(page, burst);
+
+  await page.waitForTimeout(700);
+  expect(await lit(page).count(), 'the late trail was still being replayed').toBe(0);
+});
+
+// The first packet of a sweep can be the late one; later ones show it up, and
+// the viewer catches up to them rather than staying as far behind as it was.
+test('a sweep whose first packet was late catches up', async ({ page }) => {
+  await open(page);
+  await deliver(page, [[400, 300, 0], [1000, 300, 300]]);
+  await page.waitForTimeout(100);
+
+  const right = await page.locator('.ink-laser path').evaluate(el => {
+    const b = el.getBBox(); return b.x + b.width;
+  });
+  expect(right, 'the head was held back').toBeGreaterThan(950);
+});
