@@ -24,7 +24,7 @@
 (function () {
   if (!window.perfectFreehand) return;
   // The release this is; release-extension.sh refuses a tag that disagrees.
-  var VERSION = '0.43.0';
+  var VERSION = '0.43.1';
   var getStroke = perfectFreehand.getStroke;
 
   /* ---------------------------- configuration ---------------------------- */
@@ -1490,17 +1490,23 @@
     receiveLaser(msg, true);
   }
 
-  // A packet that starts a sweep, or arrives too late to be played in its
-  // turn, fixes a new zero; the rest are shown at their offsets from it.
+  // A sweep is played from the least delayed packet seen in it: a later one
+  // that shows the zero was set late pulls it forward, and points already
+  // older than the fade when they land are dropped rather than replayed.
   function receiveLaser(msg, local) {
     var p = msg.p || [];
     if (!p.length) return;
     var t = now(), first = p[0][2], w = msg.w > 0 ? msg.w : LASER.width;
-    var fresh = beamOrigin === null || first === 0 || beamOrigin + first < t - LASER.gap;
-    if (fresh) beamOrigin = t + (local ? 0 : playDelay) - first;
-    p.forEach(function (q, i) { beam.push([q[0], q[1], beamOrigin + q[2], fresh && i === 0, w]); });
+    var origin = t + (local ? 0 : playDelay) - first;
+    var fresh = beamOrigin === null || first === 0;
+    beamOrigin = fresh ? origin : Math.min(beamOrigin, origin);
+    p.forEach(function (q, i) {
+      var at = beamOrigin + q[2];
+      if (at > t - LASER.fade) beam.push([q[0], q[1], at, fresh && i === 0, w]);
+    });
     if (!laserFrame) laserFrame = requestAnimationFrame(drawLaser);
   }
+
 
   // One filled outline per sweep, all in one path, narrowing to nothing at the
   // tail. Translucent segments overlap at every joint and paint it twice, which
