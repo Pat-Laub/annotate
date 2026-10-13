@@ -301,3 +301,24 @@ test('a stylus contact reported as pointer and touch events draws once', async (
   await stylusTouches(page, 43, [0.2, 0.4], [0.4, 0.4]);
   await expect(paths(page)).toHaveCount(1);
 });
+
+// The black letterbox around the stage is where an iPad swipe goes back a page;
+// refusing a touch there takes that away whenever the toolbar is open.
+test('a touch on the letterbox is left to the browser', async ({ page }) => {
+  await page.goto('/docs/no-pages.html');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  await page.locator('.ink-surface').waitFor();
+  await tool(page, 'pen').click();
+
+  const prevented = await page.evaluate(() => {
+    const outside = document.querySelector('.deck-viewport-shell') || document.body;
+    const touch = { identifier: 8, target: outside, clientX: 2, clientY: 2, touchType: 'direct', force: 0 };
+    const event = new Event('touchstart', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'changedTouches', { value: [touch] });
+    Object.defineProperty(event, 'touches', { value: [touch] });
+    Object.defineProperty(event, 'targetTouches', { value: [touch] });
+    outside.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(prevented).toBe(false);
+});
