@@ -255,6 +255,7 @@
   var laser = false;         // the mouse leaves a fading trail; see the laser section
   var laserT0 = 0, laserLast = 0;  // when the sweep in hand began, and last moved
   var laserStamp = -1;       // timeStamp of the last move swept: iPadOS sends each pen move twice
+  var lasering = false;      // the laser tool is drawing a trail
   var beam = [];             // trail points: [x, y, when shown, starts a sweep, width]
   var beamOrigin = null;     // local time the sweep being shown counts from
   var laserLayer, laserFrame = 0;
@@ -1482,6 +1483,10 @@
 
   function sweepLaser(e) {
     if (!laser || MUX === 'viewer' || e.pointerType === 'touch' || activePointer !== null) return;
+    beamLaser(e);
+  }
+
+  function beamLaser(e) {
     if (e.timeStamp === laserStamp) return;
     laserStamp = e.timeStamp;
     var t = now();
@@ -1888,6 +1893,7 @@
       return;
     }
     if (tool === 'eraser') { erasing = true; marked = []; erase(p[0], p[1]); sync(); return; }
+    if (tool === 'laser') { lasering = true; beamLaser(e); return; }
     snapshot();
     var stroke = { t: tool, c: inkColour(), w: widths[tool], s: !stylus, p: [p] };
     (ink[slideKey()] = ink[slideKey()] || []).push(stroke);
@@ -1923,15 +1929,16 @@
   }
 
   function move(e) {
-    if ((live || erasing || lasso || moving || resizing || textMoving) &&
+    if ((live || erasing || lasso || moving || resizing || textMoving || lasering) &&
         !AnnotationModel.ownsPointer(activePointer, e.pointerId)) return;
     hover(e);
-    if (!live && !erasing && !lasso && !moving && !resizing && !textMoving) return;
+    if (!live && !erasing && !lasso && !moving && !resizing && !textMoving && !lasering) return;
     // Reveal navigates on a pointer drag as well as on a touch swipe, and it
     // reads every move, not just the ones that follow a pointerdown it saw. A
     // stroke is not a swipe, so the moves that make it up stop here.
     e.stopPropagation();
     if (erasing) { points(e).forEach(function (p) { erase(p[0], p[1]); }); return; }
+    if (lasering) { beamLaser(e); return; }
     if (lasso) {
       if (!AnnotationModel.appendSamples(lasso.p, points(e)).added) return;
       lasso.el.setAttribute('d', lassoData(lasso.p));
@@ -2065,7 +2072,7 @@
     // capture on, so it comes straight back here. Untagged, each forward
     // forwards itself again until the browser's dispatch depth runs out.
     if (e.inkForwarded || !tool || e.pointerType !== 'touch' || !pen) return;
-    if (live || erasing || lasso || moving || resizing || textMoving) return;
+    if (live || erasing || lasso || moving || resizing || textMoving || lasering) return;
     var target = Reveal.getRevealElement();
     if (!target || target.contains(surface)) return;
     var copy = new PointerEvent(e.type, {
@@ -2104,6 +2111,7 @@
     activePointer = null;
     var drawn = live || erasing || lasso || moving || resizing || textMoving;
     unhover();  // a lifted pen leaves no cursor behind; a mouse moves on
+    lasering = false;
     if (lasso) {
       selected = strokes().filter(function (s) {
         return AnnotationGeometry.polygonContainsPoints(lasso.p, s.p);
@@ -2146,7 +2154,7 @@
 
   function up(e) {
     if (!AnnotationModel.ownsPointer(activePointer, e.pointerId)) return;
-    var drawn = live || erasing || lasso || moving || resizing || textMoving;
+    var drawn = live || erasing || lasso || moving || resizing || textMoving || lasering;
     if (drawn) e.stopPropagation();
     finishGesture();
   }
@@ -2359,6 +2367,7 @@
     if (name === 'pen') return colour;
     if (name === 'highlighter') return colour === COLOURS[0][1] ? HIGHLIGHT : colour;
     if (name === 'eraser') return RUBBER;
+    if (name === 'laser') return LASER.colour;
     return null;
   }
 
@@ -2922,6 +2931,7 @@
       '<hr>' +
       button('data-tool', 'pen', 'Pen') +
       button('data-tool', 'highlighter', 'Highlighter') +
+      button('data-tool', 'laser', 'Laser pointer (a trail that fades)') +
       '<hr>' +
       button('data-tool', 'eraser', 'Eraser (whole strokes; or hold the right button)') +
       '<hr>' +
@@ -3044,7 +3054,7 @@
       if (!b) return;
       if (b.dataset.colour) {
         colour = b.dataset.colour;
-        if (tool === 'eraser') tool = lastTool = 'pen';  // a colour implies drawing
+        if (tool === 'eraser' || tool === 'laser') tool = lastTool = 'pen';  // a colour implies drawing
       } else if (b.dataset.tool) {
         if (activePointer !== null) finishGesture();
         if (tool === 'select' && b.dataset.tool !== 'select') clearSelection();
