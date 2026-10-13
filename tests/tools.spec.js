@@ -284,6 +284,19 @@ test('the tool in hand is ringed in the colour it draws', async ({ page }) => {
   expect(await ring('select'), 'the lasso claims a colour it has none of').toBe('');
 });
 
+// Blue is the colour a deck starts in; black sits last, under red, and is
+// still the swatch the highlighter turns yellow.
+test('the swatches start on blue and end on black', async ({ page }) => {
+  await openPad(page);
+  const swatches = await page.locator('.ink-panel [data-colour]')
+    .evaluateAll(els => els.map(el => el.dataset.colour));
+  expect(swatches).toEqual(['#2668c7', '#0f9d58', '#e8710a', '#d94827', '#252525']);
+  await expect(page.locator('.ink-panel [data-colour="#2668c7"]')).toHaveClass(/active/);
+
+  await page.locator('.ink-panel [data-tool="highlighter"]').click();
+  await expect(page.locator('.ink-panel [data-colour="#252525"]')).toHaveAttribute('title', 'Yellow');
+});
+
 // The tray names the release in hand, so a reload can be seen to have fetched
 // a new one. It is a label, not a control.
 test('the more tray ends with the annotate version', async ({ page }) => {
