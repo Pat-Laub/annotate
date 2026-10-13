@@ -30,9 +30,10 @@
   /* ---------------------------- configuration ---------------------------- */
 
   var COLOURS = [
-    ['Black', '#252525'], ['Blue', '#2668c7'], ['Green', '#0f9d58'],
-    ['Orange', '#e8710a'], ['Red', '#d94827']
+    ['Blue', '#2668c7'], ['Green', '#0f9d58'], ['Orange', '#e8710a'],
+    ['Red', '#d94827'], ['Black', '#252525']
   ];
+  var BLACK = COLOURS[4];
 
   // How wide each tool draws, in slide coordinates. These defaults are tuned
   // for handwriting at the deck's corrected, browser-independent scale.
@@ -68,7 +69,7 @@
   var WIDTH_STORE = 'reveal-ink-width-v2';
 
   // Black ink is black, but a black *highlighter* is a grey smear over the
-  // words it is meant to pick out. The first swatch draws — and shows itself
+  // words it is meant to pick out. The black swatch draws — and shows itself
   // as — the colour a highlighter actually is while that tool is in hand.
   var HIGHLIGHT = '#facc15';
   // The two tools whose icon carries a colour of its own. The pen has none --
@@ -2356,7 +2357,7 @@
   }
 
   function inkColour() {
-    return tool === 'highlighter' && colour === COLOURS[0][1] ? HIGHLIGHT : colour;
+    return tool === 'highlighter' && colour === BLACK[1] ? HIGHLIGHT : colour;
   }
 
   // What the ring around a tool is coloured: what that tool would put on the
@@ -2366,7 +2367,7 @@
   // ink, so they fall back to the neutral in the stylesheet.
   function ringColour(name) {
     if (name === 'pen') return colour;
-    if (name === 'highlighter') return colour === COLOURS[0][1] ? HIGHLIGHT : colour;
+    if (name === 'highlighter') return colour === BLACK[1] ? HIGHLIGHT : colour;
     if (name === 'eraser') return RUBBER;
     if (name === 'laser') return colour;
     return null;
@@ -2736,11 +2737,11 @@
     panel.querySelectorAll('[data-colour]').forEach(function (b) {
       b.classList.toggle('active', b.dataset.colour === colour);
     });
-    // The first swatch is the one that changes colour with the tool.
-    var first = panel.querySelector('[data-colour="' + COLOURS[0][1] + '"]');
+    // The black swatch is the one that changes colour with the tool.
+    var first = panel.querySelector('[data-colour="' + BLACK[1] + '"]');
     var black = tool !== 'highlighter';
-    first.style.color = black ? COLOURS[0][1] : HIGHLIGHT;
-    first.title = black ? COLOURS[0][0] : 'Yellow';
+    first.style.color = black ? BLACK[1] : HIGHLIGHT;
+    first.title = black ? BLACK[0] : 'Yellow';
     var act = function (name) { return panel.querySelector('[data-act="' + name + '"]'); };
     // The width readout, and the − and + either side of it, belong to the tool
     // in hand; with the eraser out there is nothing for them to step.
