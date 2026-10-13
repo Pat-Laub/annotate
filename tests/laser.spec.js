@@ -225,6 +225,6 @@ test('a viewer draws the laser in the colour it is sent', async ({ page }) => {
     e.content = { a: 'laser', w: 15, c: '#0f9d58', p: [[600, 300, 0], [700, 320, 16]] };
     document.dispatchEvent(e);
   });
-  const fills = await page.locator('.ink-laser path').evaluateAll(els => els.map(el => getComputedStyle(el).fill));
-  expect(fills).toContain('rgb(15, 157, 88)');
+  await expect.poll(() => page.locator('.ink-laser path')
+    .evaluateAll(els => els.map(el => getComputedStyle(el).fill))).toContain('rgb(15, 157, 88)');
 });
