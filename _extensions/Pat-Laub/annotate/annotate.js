@@ -1785,6 +1785,9 @@
     if (live || erasing || lasso || moving || resizing || textMoving || touching !== null) return true;
     var t = e.target;
     if (!t) return false;
+    // The letterbox is the browser's: an iPad swipe there goes back a page.
+    var stage = document.querySelector('[data-deck-stage]') || Reveal.getRevealElement();
+    if (t.nodeType === 1 && !stage.contains(t)) return false;
     // Chrome that stacks above the surface, and any control the surface has cut
     // a hole over, reach us as themselves.
     if (t !== surface && reachable(t)) return false;
