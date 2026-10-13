@@ -1,5 +1,5 @@
 #!/bin/sh
-# Publish the extension payload on its own branch, for consumers to vendor with
+# Publish the extension payload, minified, on its own branch, for consumers to vendor with
 #   git subtree add --prefix=_extensions/Pat-Laub/scribble <repo> <tag> --squash
 #
 # `git subtree split` cannot be used here: this repo *contains* another subtree
@@ -18,7 +18,15 @@ version=$(git show "HEAD:$PREFIX/annotate.js" |
 [ "annotate-dist-v$version" = "$TAG" ] || {
   echo "annotate.js says VERSION $version; bump it to match $TAG"; exit 1; }
 
-tree=$(git rev-parse "HEAD:$PREFIX")
+# Consumers get minified scripts; main keeps the commented source.
+export GIT_INDEX_FILE=$(mktemp)
+trap 'rm -f "$GIT_INDEX_FILE"' EXIT
+git read-tree "HEAD:$PREFIX"
+for f in $(git ls-files -- '*.js' ':!*.min.js'); do
+  blob=$(git show "HEAD:$PREFIX/$f" | npx terser --compress --mangle | git hash-object -w --stdin)
+  git update-index --cacheinfo 100644 "$blob" "$f"
+done
+tree=$(git write-tree)
 if parent=$(git rev-parse --verify --quiet "$BRANCH"); then
   [ "$(git rev-parse "$parent^{tree}")" = "$tree" ] && {
     echo "payload unchanged since $BRANCH; nothing to release"; exit 1; }
