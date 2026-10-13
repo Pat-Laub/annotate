@@ -35,6 +35,6 @@ else
   commit=$(git commit-tree "$tree" -m "$TAG")
 fi
 git branch -f "$BRANCH" "$commit"
-git tag -f "$TAG" "$commit"
+git tag -f -a -m "$(git rev-parse HEAD)" "$TAG" "$commit"
 echo "$BRANCH -> $commit  ($TAG)"
 git ls-tree --name-only "$commit"
