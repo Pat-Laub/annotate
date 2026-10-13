@@ -175,3 +175,23 @@ test('a pen move delivered twice is swept once', async ({ page }) => {
   await page.waitForTimeout(100);
   expect(await page.evaluate(() => window.channelMessages.filter(m => m.a === 'laser').length)).toBe(1);
 });
+
+// The laser is also a tool on the rail: what the pen draws with it in hand is
+// a trail that fades, not ink, so the Pencil can point without the T key.
+test('the laser tool turns a drawn stroke into a trail', async ({ page }) => {
+  await open(page);
+  await listen(page);
+  await page.click('[data-tool=laser]');
+  const box = await page.locator('.reveal .slides').boundingBox();
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.5, { steps: 12 });
+  await page.mouse.up();
+
+  await expect(lit(page).first(), 'no trail was drawn').toBeAttached();
+  const sent = await page.evaluate(() => window.channelMessages.map(m => m.a));
+  expect(sent).toContain('laser');
+  expect(sent).not.toContain('start');
+  await expect(page.locator('.ink-layer path')).toHaveCount(0);
+  await expect(lit(page), 'the trail did not fade').toHaveCount(0, { timeout: 3000 });
+});
