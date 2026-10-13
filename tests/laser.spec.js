@@ -195,3 +195,36 @@ test('the laser tool turns a drawn stroke into a trail', async ({ page }) => {
   await expect(page.locator('.ink-layer path')).toHaveCount(0);
   await expect(lit(page), 'the trail did not fade').toHaveCount(0, { timeout: 3000 });
 });
+
+// The laser draws in the swatch chosen on the rail, and the colour travels
+// with the trail so a viewer shows it the same; picking one keeps the laser.
+test('the laser draws in the chosen colour', async ({ page }) => {
+  await open(page);
+  await listen(page);
+  await page.click('[data-tool=laser]');
+  await page.click('[data-colour="#2668c7"]');
+  await expect(page.locator('[data-tool=laser]')).toHaveClass(/active/);
+
+  const box = await page.locator('.reveal .slides').boundingBox();
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.5, { steps: 12 });
+
+  const fill = await page.locator('.ink-laser path').evaluate(el => getComputedStyle(el).fill);
+  expect(fill).toBe('rgb(38, 104, 199)');
+  const sent = await page.evaluate(() => window.channelMessages.find(m => m.a === 'laser'));
+  expect(sent.c).toBe('#2668c7');
+  await page.mouse.up();
+});
+
+test('a viewer draws the laser in the colour it is sent', async ({ page }) => {
+  await open(page, '/docs/no-pages.html?project');
+  await deliver(page, [[400, 300, 0], [500, 320, 16]]);
+  await page.evaluate(() => {
+    const e = new CustomEvent('received');
+    e.content = { a: 'laser', w: 15, c: '#0f9d58', p: [[600, 300, 0], [700, 320, 16]] };
+    document.dispatchEvent(e);
+  });
+  const fills = await page.locator('.ink-laser path').evaluateAll(els => els.map(el => getComputedStyle(el).fill));
+  expect(fills).toContain('rgb(15, 157, 88)');
+});
