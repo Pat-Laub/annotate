@@ -158,3 +158,20 @@ test('a sweep whose first packet was late catches up', async ({ page }) => {
   });
   expect(right, 'the head was held back').toBeGreaterThan(950);
 });
+
+// iPadOS delivers each Apple Pencil move twice, the same event with the same
+// timeStamp; drawn twice, the trail doubled back on itself into blotches.
+test('a pen move delivered twice is swept once', async ({ page }) => {
+  await open(page, '/docs/closed.html');
+  await listen(page);
+  await page.keyboard.press('t');
+  await page.evaluate(() => {
+    const move = new PointerEvent('pointermove', {
+      bubbles: true, pointerType: 'pen', pointerId: 2, clientX: 400, clientY: 300, pressure: 0.3
+    });
+    window.dispatchEvent(move);
+    window.dispatchEvent(move);
+  });
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.channelMessages.filter(m => m.a === 'laser').length)).toBe(1);
+});
