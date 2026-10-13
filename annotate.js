@@ -24,7 +24,7 @@
 (function () {
   if (!window.perfectFreehand) return;
   // The release this is; release-extension.sh refuses a tag that disagrees.
-  var VERSION = '0.43.1';
+  var VERSION = '0.43.2';
   var getStroke = perfectFreehand.getStroke;
 
   /* ---------------------------- configuration ---------------------------- */
@@ -254,6 +254,7 @@
   var lastRub = null;     // the erase an undo would reverse, so a misfire can be marked as one
   var laser = false;         // the mouse leaves a fading trail; see the laser section
   var laserT0 = 0, laserLast = 0;  // when the sweep in hand began, and last moved
+  var laserStamp = -1;       // timeStamp of the last move swept: iPadOS sends each pen move twice
   var beam = [];             // trail points: [x, y, when shown, starts a sweep, width]
   var beamOrigin = null;     // local time the sweep being shown counts from
   var laserLayer, laserFrame = 0;
@@ -1481,6 +1482,8 @@
 
   function sweepLaser(e) {
     if (!laser || MUX === 'viewer' || e.pointerType === 'touch' || activePointer !== null) return;
+    if (e.timeStamp === laserStamp) return;
+    laserStamp = e.timeStamp;
     var t = now();
     if (t - laserLast > LASER.gap) laserT0 = t;
     laserLast = t;
