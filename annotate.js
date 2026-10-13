@@ -24,15 +24,16 @@
 (function () {
   if (!window.perfectFreehand) return;
   // The release this is; release-extension.sh refuses a tag that disagrees.
-  var VERSION = '0.43.2';
+  var VERSION = '0.44.0';
   var getStroke = perfectFreehand.getStroke;
 
   /* ---------------------------- configuration ---------------------------- */
 
   var COLOURS = [
-    ['Black', '#252525'], ['Blue', '#2668c7'], ['Green', '#0f9d58'],
-    ['Orange', '#e8710a'], ['Red', '#d94827']
+    ['Blue', '#2668c7'], ['Green', '#0f9d58'], ['Orange', '#e8710a'],
+    ['Red', '#d94827'], ['Black', '#252525']
   ];
+  var BLACK = COLOURS[4];
 
   // How wide each tool draws, in slide coordinates. These defaults are tuned
   // for handwriting at the deck's corrected, browser-independent scale.
@@ -68,7 +69,7 @@
   var WIDTH_STORE = 'reveal-ink-width-v2';
 
   // Black ink is black, but a black *highlighter* is a grey smear over the
-  // words it is meant to pick out. The first swatch draws — and shows itself
+  // words it is meant to pick out. The black swatch draws — and shows itself
   // as — the colour a highlighter actually is while that tool is in hand.
   var HIGHLIGHT = '#facc15';
   // The two tools whose icon carries a colour of its own. The pen has none --
@@ -255,7 +256,8 @@
   var laser = false;         // the mouse leaves a fading trail; see the laser section
   var laserT0 = 0, laserLast = 0;  // when the sweep in hand began, and last moved
   var laserStamp = -1;       // timeStamp of the last move swept: iPadOS sends each pen move twice
-  var beam = [];             // trail points: [x, y, when shown, starts a sweep, width]
+  var lasering = false;      // the laser tool is drawing a trail
+  var beam = [];             // trail points: [x, y, when shown, starts a sweep, width, colour]
   var beamOrigin = null;     // local time the sweep being shown counts from
   var laserLayer, laserFrame = 0;
   var diagnostics = [];      // bounded, session-only input trace; exported with ink
@@ -1482,13 +1484,17 @@
 
   function sweepLaser(e) {
     if (!laser || MUX === 'viewer' || e.pointerType === 'touch' || activePointer !== null) return;
+    beamLaser(e);
+  }
+
+  function beamLaser(e) {
     if (e.timeStamp === laserStamp) return;
     laserStamp = e.timeStamp;
     var t = now();
     if (t - laserLast > LASER.gap) laserT0 = t;
     laserLast = t;
     var d = Math.round(t - laserT0);
-    var msg = { a: 'laser', w: LASER.width, p: points(e).map(function (q) { return [round(q[0]), round(q[1]), d]; }) };
+    var msg = { a: 'laser', w: LASER.width, c: colour, p: points(e).map(function (q) { return [round(q[0]), round(q[1]), d]; }) };
     send(msg);
     receiveLaser(msg, true);
   }
@@ -1499,48 +1505,49 @@
   function receiveLaser(msg, local) {
     var p = msg.p || [];
     if (!p.length) return;
-    var t = now(), first = p[0][2], w = msg.w > 0 ? msg.w : LASER.width;
+    var t = now(), first = p[0][2], w = msg.w > 0 ? msg.w : LASER.width, c = msg.c || LASER.colour;
     var origin = t + (local ? 0 : playDelay) - first;
     var fresh = beamOrigin === null || first === 0;
     beamOrigin = fresh ? origin : Math.min(beamOrigin, origin);
     p.forEach(function (q, i) {
       var at = beamOrigin + q[2];
-      if (at > t - LASER.fade) beam.push([q[0], q[1], at, fresh && i === 0, w]);
+      if (at > t - LASER.fade) beam.push([q[0], q[1], at, fresh && i === 0, w, c]);
     });
     if (!laserFrame) laserFrame = requestAnimationFrame(drawLaser);
   }
 
 
-  // One filled outline per sweep, all in one path, narrowing to nothing at the
+  // One filled outline per sweep, in its own colour, narrowing to nothing at the
   // tail. Translucent segments overlap at every joint and paint it twice, which
   // strung the trail into beads, one per sample.
   function drawLaser() {
     laserFrame = 0;
-    var t = now(), d = [];
+    var t = now(), sweeps = [];
     beam = beam.filter(function (b) { return b[2] > t - LASER.fade; });
     var shown = beam.filter(function (b) { return b[2] <= t; });
     for (var i = 0, from = 0; i <= shown.length; i++) {
       if (i === from || (i < shown.length && !shown[i][3])) continue;
-      var size = shown[from][4] / 2;
+      var size = shown[from][4] / 2, c = shown[from][5];
       var pts = getStroke(shown.slice(from, i).map(function (b) {
         return [b[0], b[1], 1 - (t - b[2]) / LASER.fade];
       }), { size: size, thinning: 1, smoothing: 0.5, streamline: 0.3, simulatePressure: false, last: true });
       from = i;
       if (!pts.length) continue;
-      d.push('M', round(pts[0][0]), round(pts[0][1]), 'Q');
+      var d = ['M', round(pts[0][0]), round(pts[0][1]), 'Q'];
       for (var k = 0; k < pts.length; k++) {
         var p = pts[k], q = pts[(k + 1) % pts.length];
         d.push(round(p[0]), round(p[1]), round((p[0] + q[0]) / 2), round((p[1] + q[1]) / 2));
       }
       d.push('Z');
+      sweeps.push([d.join(' '), c]);
     }
-    var el = laserLayer.firstChild;
-    if (!d.length) {
-      if (el) laserLayer.removeChild(el);
-    } else {
-      if (!el) el = laserLayer.appendChild(document.createElementNS(SVG_NS, 'path'));
-      el.setAttribute('d', d.join(' '));
-    }
+    while (laserLayer.childNodes.length > sweeps.length) laserLayer.removeChild(laserLayer.lastChild);
+    sweeps.forEach(function (sweep, n) {
+      var el = laserLayer.childNodes[n] ||
+        laserLayer.appendChild(document.createElementNS(SVG_NS, 'path'));
+      el.setAttribute('d', sweep[0]);
+      el.style.color = sweep[1];
+    });
     if (beam.length) laserFrame = requestAnimationFrame(drawLaser);
   }
 
@@ -1888,6 +1895,7 @@
       return;
     }
     if (tool === 'eraser') { erasing = true; marked = []; erase(p[0], p[1]); sync(); return; }
+    if (tool === 'laser') { lasering = true; beamLaser(e); return; }
     snapshot();
     var stroke = { t: tool, c: inkColour(), w: widths[tool], s: !stylus, p: [p] };
     (ink[slideKey()] = ink[slideKey()] || []).push(stroke);
@@ -1923,15 +1931,16 @@
   }
 
   function move(e) {
-    if ((live || erasing || lasso || moving || resizing || textMoving) &&
+    if ((live || erasing || lasso || moving || resizing || textMoving || lasering) &&
         !AnnotationModel.ownsPointer(activePointer, e.pointerId)) return;
     hover(e);
-    if (!live && !erasing && !lasso && !moving && !resizing && !textMoving) return;
+    if (!live && !erasing && !lasso && !moving && !resizing && !textMoving && !lasering) return;
     // Reveal navigates on a pointer drag as well as on a touch swipe, and it
     // reads every move, not just the ones that follow a pointerdown it saw. A
     // stroke is not a swipe, so the moves that make it up stop here.
     e.stopPropagation();
     if (erasing) { points(e).forEach(function (p) { erase(p[0], p[1]); }); return; }
+    if (lasering) { beamLaser(e); return; }
     if (lasso) {
       if (!AnnotationModel.appendSamples(lasso.p, points(e)).added) return;
       lasso.el.setAttribute('d', lassoData(lasso.p));
@@ -2065,7 +2074,7 @@
     // capture on, so it comes straight back here. Untagged, each forward
     // forwards itself again until the browser's dispatch depth runs out.
     if (e.inkForwarded || !tool || e.pointerType !== 'touch' || !pen) return;
-    if (live || erasing || lasso || moving || resizing || textMoving) return;
+    if (live || erasing || lasso || moving || resizing || textMoving || lasering) return;
     var target = Reveal.getRevealElement();
     if (!target || target.contains(surface)) return;
     var copy = new PointerEvent(e.type, {
@@ -2104,6 +2113,7 @@
     activePointer = null;
     var drawn = live || erasing || lasso || moving || resizing || textMoving;
     unhover();  // a lifted pen leaves no cursor behind; a mouse moves on
+    lasering = false;
     if (lasso) {
       selected = strokes().filter(function (s) {
         return AnnotationGeometry.polygonContainsPoints(lasso.p, s.p);
@@ -2146,7 +2156,7 @@
 
   function up(e) {
     if (!AnnotationModel.ownsPointer(activePointer, e.pointerId)) return;
-    var drawn = live || erasing || lasso || moving || resizing || textMoving;
+    var drawn = live || erasing || lasso || moving || resizing || textMoving || lasering;
     if (drawn) e.stopPropagation();
     finishGesture();
   }
@@ -2347,7 +2357,7 @@
   }
 
   function inkColour() {
-    return tool === 'highlighter' && colour === COLOURS[0][1] ? HIGHLIGHT : colour;
+    return tool === 'highlighter' && colour === BLACK[1] ? HIGHLIGHT : colour;
   }
 
   // What the ring around a tool is coloured: what that tool would put on the
@@ -2357,8 +2367,9 @@
   // ink, so they fall back to the neutral in the stylesheet.
   function ringColour(name) {
     if (name === 'pen') return colour;
-    if (name === 'highlighter') return colour === COLOURS[0][1] ? HIGHLIGHT : colour;
+    if (name === 'highlighter') return colour === BLACK[1] ? HIGHLIGHT : colour;
     if (name === 'eraser') return RUBBER;
+    if (name === 'laser') return colour;
     return null;
   }
 
@@ -2726,11 +2737,11 @@
     panel.querySelectorAll('[data-colour]').forEach(function (b) {
       b.classList.toggle('active', b.dataset.colour === colour);
     });
-    // The first swatch is the one that changes colour with the tool.
-    var first = panel.querySelector('[data-colour="' + COLOURS[0][1] + '"]');
+    // The black swatch is the one that changes colour with the tool.
+    var first = panel.querySelector('[data-colour="' + BLACK[1] + '"]');
     var black = tool !== 'highlighter';
-    first.style.color = black ? COLOURS[0][1] : HIGHLIGHT;
-    first.title = black ? COLOURS[0][0] : 'Yellow';
+    first.style.color = black ? BLACK[1] : HIGHLIGHT;
+    first.title = black ? BLACK[0] : 'Yellow';
     var act = function (name) { return panel.querySelector('[data-act="' + name + '"]'); };
     // The width readout, and the − and + either side of it, belong to the tool
     // in hand; with the eraser out there is nothing for them to step.
@@ -2922,6 +2933,7 @@
       '<hr>' +
       button('data-tool', 'pen', 'Pen') +
       button('data-tool', 'highlighter', 'Highlighter') +
+      button('data-tool', 'laser', 'Laser pointer (a trail that fades)') +
       '<hr>' +
       button('data-tool', 'eraser', 'Eraser (whole strokes; or hold the right button)') +
       '<hr>' +
