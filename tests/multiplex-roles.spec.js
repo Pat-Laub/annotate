@@ -8,6 +8,10 @@ const { test, expect } = require('@playwright/test');
 // A second BroadcastChannel object in the same document hears everything the
 // deck's own object sends, which is enough to see what a window puts out
 // without opening a second window to receive it.
+//
+// The channel is only opened inside the revealjs-presenter app, whose bridge
+// sets __mpxBridgeInstalled; these tests pretend to be in it.
+const inApp = page => page.addInitScript(() => { window.__mpxBridgeInstalled = true; });
 
 const listen = page => page.evaluate(() => {
   window.channelMessages = [];
@@ -18,6 +22,7 @@ const listen = page => page.evaluate(() => {
 });
 
 async function open(page, handed) {
+  await inApp(page);
   if (handed) await page.addInitScript(given => { window.__multiplex = given; }, handed);
   await page.goto('/docs/no-pages.html');
   await page.waitForFunction(() => window.Reveal && Reveal.isReady());
@@ -48,6 +53,17 @@ test('a plain deck drives the windows beside it', async ({ page }) => {
   expect(sent[sent.length - 1].state.indexh).toBe(1);
 });
 
+// Two browser tabs of one deck are for looking at two slides, not for
+// presenting: the channel is the app's transport only.
+test('a plain browser tab does not drive the tabs beside it', async ({ page }) => {
+  await page.goto('/docs/no-pages.html');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  await listen(page);
+  await nextSlide(page);
+
+  expect(await settle(page), 'the tab drove the channel').toEqual([]);
+});
+
 // The projector Mac signs in as the audience and follows the relay, but it was
 // still driving on the channel: a drag of its own slider, or a stray click,
 // went out to every other window of that browser.
@@ -70,6 +86,7 @@ test('a presenter drives the windows beside it', async ({ page }) => {
 // follower with nothing to sign in to: a second window of this browser put on a
 // projector, where the channel carries everything already.
 test('a projected window with no credentials follows the channel without answering it', async ({ page }) => {
+  await inApp(page);
   await page.goto('/docs/no-pages.html?project');
   await page.waitForFunction(() => window.Reveal && Reveal.isReady());
 
@@ -93,6 +110,7 @@ test('a projected window with no credentials follows the channel without answeri
 // is as it opens, and then gets out of the way.
 
 async function openProjected(page) {
+  await inApp(page);
   await page.goto('/docs/no-pages.html?project');
   await page.waitForFunction(() => window.Reveal && Reveal.isReady());
 }
