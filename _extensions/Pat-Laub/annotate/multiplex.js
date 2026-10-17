@@ -5,9 +5,9 @@
 // are already in the right role, with no ids or secrets to carry around.
 //
 // With no role stored this contacts no server at all, which is how the published
-// decks stay ordinary. It does still talk on a BroadcastChannel, which reaches
-// no further than this browser's own windows: open the same deck twice and the
-// two follow each other with no relay in between and nothing to sign in to.
+// decks stay ordinary. Inside the revealjs-presenter iPad app it also talks on a
+// BroadcastChannel, which the app bridges between its two web views. Ordinary
+// browser tabs stay out of it, so two tabs of one deck sit on different slides.
 window.RevealMultiplex = {
 	id: 'multiplex',
 
@@ -89,11 +89,10 @@ window.RevealMultiplex = {
 		var announce = role === 'audience';
 
 		/* ----------------------- the window next to this one ------------------ */
-		// Two windows of the same deck in one browser -- one of them dragged onto an
-		// external monitor -- need no relay between them: BroadcastChannel carries
-		// the same messages straight across, same origin, same device. A deck with
-		// no role given to it both talks and listens, so whichever one you touch is
-		// the one that leads and there is nothing to set up or remember.
+		// The revealjs-presenter app's two web views need no relay between them:
+		// its bridge stands in for BroadcastChannel and sets __mpxBridgeInstalled.
+		// A deck with no role given to it both talks and listens, so whichever one
+		// you touch is the one that leads and there is nothing to set up.
 
 		// Set while a message off the channel is being applied, because applying one
 		// moves this deck, and moving this deck is what sends messages. Without it a
@@ -102,7 +101,7 @@ window.RevealMultiplex = {
 		var applying = false;
 
 		var channel = null;
-		try { if ( window.BroadcastChannel ) channel = new BroadcastChannel( 'reveal-multiplex' ); } catch ( e ) {}
+		try { if ( window.__mpxBridgeInstalled && window.BroadcastChannel ) channel = new BroadcastChannel( 'reveal-multiplex' ); } catch ( e ) {}
 
 		if ( channel ) {
 			// Costs nothing when nothing is listening: postMessage into a channel with
