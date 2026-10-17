@@ -13,6 +13,7 @@ const listen = page => page.evaluate(() => {
 });
 
 async function open(page, url = '/docs/no-pages.html') {
+  await page.addInitScript(() => { window.__mpxBridgeInstalled = true; });
   await page.goto(url);
   await page.waitForFunction(() => window.Reveal && Reveal.isReady());
   await page.locator('.ink-surface').waitFor({ state: 'attached' });
