@@ -119,12 +119,14 @@ test('the rail can be left anywhere, and is still there after a reload', async (
   }
 });
 
-test('a tap on the grip chooses no tool and moves nothing', async ({ page }) => {
+test('a tap on the grip chooses no tool, moves nothing and folds the rail', async ({ page }) => {
   await openPad(page);
   const before = (await boxes(page)).rail;
   const active = () => page.evaluate(() =>
     document.querySelector('.ink-panel [data-tool].active').dataset.tool);
   const tool = await active();
+  await grip(page).click();
+  await expect(rail(page)).toHaveClass(/\bink-collapsed\b/);
   await grip(page).click();
   const after = (await boxes(page)).rail;
   expect(near(after.left, before.left, 1) && near(after.top, before.top, 1)).toBe(true);
