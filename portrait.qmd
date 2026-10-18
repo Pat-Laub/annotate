@@ -1,0 +1,12 @@
+---
+pagetitle: Annotate fixture on a portrait page
+format:
+  slide-stage-revealjs:
+    theme: [white, fixture.scss, portrait.scss, _extensions/Pat-Laub/annotate/annotate.scss]
+    width: 2106
+    height: 3744
+    annotate:
+      pages: false
+---
+
+## A page taller than it is wide {#portrait-one}

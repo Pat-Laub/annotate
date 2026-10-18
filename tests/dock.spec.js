@@ -42,6 +42,19 @@ test('the rail starts standing up on the right, most of the stage tall', async (
   await expect(rail(page)).toHaveAttribute('data-open', 'left');
 });
 
+// The rail's length follows the page's shorter side, so a portrait page gets
+// the same rail as a landscape one rather than one three quarters of its height.
+test('a portrait page has a rail as long as a landscape page does', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await page.goto('/docs/portrait.html');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  await expect(rail(page)).toBeVisible();
+  const { rail: r, stage } = await boxes(page);
+  expect(stage.h, 'the page is not portrait').toBeGreaterThan(stage.w);
+  expect(near(r.h, stage.w * 0.75, stage.w * 0.03),
+    `the rail is ${r.h}px long, not three quarters of the ${stage.w}px width`).toBe(true);
+});
+
 test('a deck can start the rail along the bottom', async ({ page }) => {
   await page.goto('/docs/docked.html');
   await page.waitForFunction(() => window.Reveal && Reveal.isReady());
