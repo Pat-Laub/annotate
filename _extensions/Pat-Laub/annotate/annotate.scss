@@ -21,7 +21,7 @@ $ink-button-size: 102px !default;
 // $ink-panel-length between them makes them -- never less than square.
 $ink-rail-button-width: 150px !default;
 $ink-rail-icon: 76px !default;
-// How long the rail is, as a share of the stage's height, whichever way it
+// How long the rail is, as a share of the stage's shorter side, whichever way it
 // lies: turned along the top or bottom it keeps the length and the buttons it
 // had standing up. Not all of it: the ends of a side are left for whatever the
 // slide keeps there.
@@ -274,7 +274,7 @@ $ink-launcher-icon: 120px !default;
   align-items: center;
   box-sizing: border-box;
   width: $ink-panel-width;
-  min-height: calc(#{$ink-panel-length} * var(--ink-stage-height, 100%));
+  min-height: calc(#{$ink-panel-length} * var(--ink-stage-side, 100%));
   max-height: calc(100% - #{2 * $ink-dock-margin});
   padding: 0 0 15px;
   // A thumb that rolls a little while it taps would otherwise be read as the
@@ -306,7 +306,7 @@ $ink-launcher-icon: 120px !default;
     flex-direction: row;
     width: auto;
     height: $ink-panel-width;
-    min-width: calc(#{$ink-panel-length} * var(--ink-stage-height, 100%));
+    min-width: calc(#{$ink-panel-length} * var(--ink-stage-side, 100%));
     max-width: calc(100% - #{2 * $ink-dock-margin});
     min-height: 0;
     padding: 0 15px 0 0;
@@ -351,6 +351,17 @@ $ink-launcher-icon: 120px !default;
   &::before {
     width: 12px;
     height: 66px;
+  }
+}
+
+// Folded by a tap on the grip: the grip, to move it and to open it again, and
+// the tool in hand, to show what a stroke will be.
+.deck-stage > .ink-panel.ink-collapsed {
+  min-height: 0;
+  min-width: 0;
+
+  > :not(.ink-grip):not([data-tool].active) {
+    display: none !important;
   }
 }
 

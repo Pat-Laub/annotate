@@ -184,6 +184,7 @@
   // Where the tool rail was last left, per deck: the deck's `dock` option only
   // says where it starts.
   var DOCK_STORE = 'reveal-ink-dock:' + location.pathname;
+  var FOLD_STORE = 'reveal-ink-folded:' + location.pathname;
 
   // How long a viewer holds each packet of a stroke before drawing it, in
   // milliseconds, and the settings the more menu offers. See the multiplexing
@@ -2603,6 +2604,7 @@
     bottom: { x: 0.5, y: 1, across: true }
   };
   var dock = DOCK_STARTS.right;
+  var folded = false;           // the rail is down to its grip and the tool in hand
 
   function readDock(start) {
     var saved = null;
@@ -2617,6 +2619,14 @@
     try { localStorage.setItem(DOCK_STORE, JSON.stringify(dock)); } catch (e) { /* full or blocked */ }
   }
 
+  function readFolded() {
+    try { return localStorage.getItem(FOLD_STORE) === 'true'; } catch (e) { return false; }
+  }
+
+  function saveFolded() {
+    try { localStorage.setItem(FOLD_STORE, String(folded)); } catch (e) { /* full or blocked */ }
+  }
+
   function clamp(v, lo, hi) { return hi < lo ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)); }
 
   // Sizes are the stage's own, untransformed, which is what `left` and `top`
@@ -2625,7 +2635,7 @@
   function placePanel() {
     if (!panel.classList.contains('active')) return;
     var box = panel.parentNode, sw = box.offsetWidth, sh = box.offsetHeight;
-    panel.style.setProperty('--ink-stage-height', sh + 'px');
+    panel.style.setProperty('--ink-stage-side', Math.min(sw, sh) + 'px');
     panel.classList.toggle('ink-across', dock.across);
     var w = panel.offsetWidth, h = panel.offsetHeight;
     var cx = clamp(dock.x * sw, DOCK_MARGIN + w / 2, sw - DOCK_MARGIN - w / 2);
@@ -2670,7 +2680,8 @@
       e.preventDefault();
       e.stopPropagation();
       var p = at(e);
-      drag = { id: e.pointerId, dx: p.x - dock.x * p.sw, dy: p.y - dock.y * p.sh };
+      drag = { id: e.pointerId, dx: p.x - dock.x * p.sw, dy: p.y - dock.y * p.sh,
+               x: e.clientX, y: e.clientY, moved: false };
       try { grip.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
       panel.classList.add('ink-dragging');
     });
@@ -2679,6 +2690,10 @@
       if (!drag || e.pointerId !== drag.id) return;
       e.preventDefault();
       e.stopPropagation();
+      // Within a tap's slop it is still a tap, which folds the rail on release.
+      if (!drag.moved && Math.abs(e.clientX - drag.x) <= CHROME_TAP_SLOP &&
+          Math.abs(e.clientY - drag.y) <= CHROME_TAP_SLOP) return;
+      drag.moved = true;
       var p = at(e);
       var side = Math.min(p.x, p.sw - p.x) / p.sw;
       var end = Math.min(p.y, p.sh - p.y) / p.sh;
@@ -2698,9 +2713,16 @@
     function drop(e) {
       if (!drag || e.pointerId !== drag.id) return;
       e.stopPropagation();
+      var tapped = e.type === 'pointerup' && !drag.moved;
       drag = null;
       panel.classList.remove('ink-dragging');
       saveDock();
+      if (tapped) {
+        folded = !folded;
+        if (folded) moreOpen = false;
+        saveFolded();
+        sync();
+      }
     }
     grip.addEventListener('pointerup', drop);
     grip.addEventListener('pointercancel', drop);
@@ -2716,6 +2738,7 @@
   function sync() {
     var key = slideKey(), on = !!tool;
     panel.classList.toggle('active', on);
+    panel.classList.toggle('ink-collapsed', folded);
     placePanel();
     surface.classList.toggle('drawing', on);
     // Now, so the holes are there for a tip already on its way down, and again
@@ -3128,6 +3151,7 @@
     if (DELAYS.indexOf(opts.delay) >= 0) { DELAY = opts.delay; playDelay = readDelay(); }
     toolsOpen = opts.tools === 'open';
     dock = readDock(opts.dock);
+    folded = readFolded();
     if (toolsOpen && !tool) open(true);
     showChrome(chrome);
 
