@@ -161,6 +161,9 @@ window.RevealMultiplex = {
 		document.addEventListener( 'fullscreenchange', relayer );
 		document.addEventListener( 'webkitfullscreenchange', relayer );
 
+		deck.on( 'ready', scaleChip );
+		window.addEventListener( 'resize', scaleChip );
+
 		if ( role === 'audience' ) deck.on( 'ready', function () {
 			deck.on( 'slidechanged', function () { if ( !applying ) detach(); } );
 		} );
@@ -178,16 +181,14 @@ window.RevealMultiplex = {
 				back.addEventListener( 'click', follow );
 				chip.appendChild( back );
 				layer().appendChild( chip );
-				window.addEventListener( 'resize', scaleChip );
 			}
 			chip.hidden = false;
-			scaleChip();
 		}
 
 		// Match the slide's body text, whatever is scaling the slides.
 		function scaleChip() {
 			var r = deck.getSlidesElement().getBoundingClientRect(), c = deck.getConfig();
-			chip.style.setProperty( '--chip-scale', Math.max( r.width, r.height ) / Math.max( c.width, c.height ) );
+			document.documentElement.style.setProperty( '--chip-scale', Math.max( r.width, r.height ) / Math.max( c.width, c.height ) );
 		}
 
 		function follow() {
