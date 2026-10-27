@@ -204,6 +204,20 @@ test('the chip is set at half the size of the slide text', async ({ page }) => {
   expect(sizes.chip).toBeLessThan(sizes.text * 0.55);
 });
 
+test('the mode caption matches the chip, at the bottom', async ({ page }) => {
+  await openProjected(page);
+  const caption = await mode(page).evaluate(el => {
+    const s = getComputedStyle(el);
+    return { size: s.fontSize, bottom: s.bottom };
+  });
+  await page.keyboard.press('ArrowRight');
+  const pill = await chip(page).evaluate(el => {
+    const s = getComputedStyle(el);
+    return { size: s.fontSize, bottom: s.bottom };
+  });
+  expect(caption).toEqual(pill);
+});
+
 test('the chip still shows in full screen', async ({ page }) => {
   await openProjected(page);
   await page.keyboard.press('f');
