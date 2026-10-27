@@ -806,20 +806,25 @@ $ink-launcher-icon: 120px !default;
   .deck-stage > .ink-surface.drawing { pointer-events: auto !important; }
 }
 
-// Which mode the window opened in, said once and then taken away by
-// multiplex.js: a projected screen is not to carry a permanent caption.
-.multiplex-mode {
+// Every audience-window message: bottom centre, half the slide text size.
+%multiplex-pill {
   position: fixed;
   left: 50%;
-  top: 42px;
+  bottom: 42px;
   transform: translateX(-50%);
   z-index: 60;
-  padding: 12px 36px;
+  padding: 0.3em 0.9em;
   border-radius: 2997px;
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
-  font-size: 39px;
+  font-size: calc(var(--r-main-font-size, 39px) * 0.5 * var(--chip-scale, 1));
   font-family: sans-serif;
+}
+
+// Which mode the window opened in, said once and then taken away by
+// multiplex.js: a projected screen is not to carry a permanent caption.
+.multiplex-mode {
+  @extend %multiplex-pill;
   animation: multiplex-mode-out 4s ease-in forwards;
 }
 
@@ -831,20 +836,12 @@ $ink-launcher-icon: 120px !default;
 // The one control an audience window has: it appears when the window has been
 // moved by hand and is no longer following, and goes away when it is.
 .multiplex-detached {
-  position: fixed;
-  left: 50%;
-  bottom: 42px;
-  transform: translateX(-50%);
+  @extend %multiplex-pill;
   z-index: 61;
   display: flex;
   align-items: center;
   gap: 0.6em;
   padding: 0.3em 0.45em 0.3em 0.9em;
-  border-radius: 2997px;
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  font-size: calc(var(--r-main-font-size, 39px) * 0.5 * var(--chip-scale, 1));
-  font-family: sans-serif;
 
   &[hidden] { display: none; }
 
@@ -862,17 +859,7 @@ $ink-launcher-icon: 120px !default;
 // Shown only when the presenting device is on a different deck, so the slides
 // deliberately stop following. Small and low-contrast: it is projected.
 .multiplex-notice {
-  position: fixed;
-  left: 50%;
-  bottom: 42px;
-  transform: translateX(-50%);
-  z-index: 60;
+  @extend %multiplex-pill;
   display: none;
-  padding: 12px 36px;
-  border-radius: 2997px;
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  font-size: 39px;
-  font-family: sans-serif;
 }
 
