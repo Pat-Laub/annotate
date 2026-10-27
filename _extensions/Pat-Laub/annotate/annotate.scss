@@ -843,7 +843,7 @@ $ink-launcher-icon: 120px !default;
   border-radius: 2997px;
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
-  font-size: calc(var(--r-main-font-size, 39px) * var(--chip-scale, 1));
+  font-size: calc(var(--r-main-font-size, 39px) * 0.5 * var(--chip-scale, 1));
   font-family: sans-serif;
 
   &[hidden] { display: none; }
