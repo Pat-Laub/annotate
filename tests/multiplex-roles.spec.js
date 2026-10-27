@@ -187,7 +187,7 @@ test('Return live puts the window back on the presenter\'s slide', async ({ page
   await expect.poll(() => at(page), { message: 'it did not resume following' }).toBe(1);
 });
 
-test('the chip is set at the size of the slide text', async ({ page }) => {
+test('the chip is set at half the size of the slide text', async ({ page }) => {
   await openProjected(page);
   await page.keyboard.press('ArrowRight');
   await expect(chip(page)).toBeVisible();
@@ -200,8 +200,8 @@ test('the chip is set at the size of the slide text', async ({ page }) => {
       text: parseFloat(getComputedStyle(p).fontSize) * shown
     };
   });
-  expect(sizes.chip).toBeGreaterThan(sizes.text * 0.9);
-  expect(sizes.chip).toBeLessThan(sizes.text * 1.1);
+  expect(sizes.chip).toBeGreaterThan(sizes.text * 0.45);
+  expect(sizes.chip).toBeLessThan(sizes.text * 0.55);
 });
 
 test('the chip still shows in full screen', async ({ page }) => {
