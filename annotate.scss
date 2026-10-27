@@ -770,16 +770,18 @@ $ink-launcher-icon: 120px !default;
 
 // The audience view is on a projector, so it carries no controls at all: the
 // annotation panel and its corner buttons are for the presenting device, and
-// reveal's own arrows and progress bar would only invite someone to click them.
-// The ink itself stays, since showing it is the whole point of that view.
+// reveal's own arrows would only invite someone to click them. The progress
+// bar stays as a gauge, with its click taken away. The ink itself stays, since
+// showing it is the whole point of that view.
 // `multiplex-audience` is set on <html> by the multiplex plugin.
 .multiplex-audience {
   .deck-stage > .ink-panel,
   .deck-stage > .deck-launchers,
-  .reveal .controls,
-  .reveal .progress {
+  .reveal .controls {
     display: none !important;
   }
+
+  .reveal .progress { pointer-events: none; }
 
   // The pointer has no job on this screen.
   .deck-stage > .ink-surface { pointer-events: none !important; }
