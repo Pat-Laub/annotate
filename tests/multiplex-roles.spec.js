@@ -226,3 +226,9 @@ test('a window that is following says nothing', async ({ page }) => {
 
   await expect(chip(page)).toHaveCount(0);
 });
+
+test('a projected window shows the progress bar', async ({ page }) => {
+  await page.goto('/docs/no-pages.html?project');
+  await page.waitForFunction(() => window.Reveal && Reveal.isReady());
+  await expect(page.locator('.reveal .progress')).toBeVisible();
+});
