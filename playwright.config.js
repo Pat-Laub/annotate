@@ -1,6 +1,13 @@
 const { defineConfig, devices } = require('@playwright/test');
+const fs = require('fs');
 const path = require('path');
 const { BUILD_ROOT } = require('./scripts/buildpaths.js');
+
+// Endpoint security blocks ~/Library/Application Support/Firefox, and Firefox
+// before 153.6 hangs headless when it cannot read profiles.ini there.
+const firefoxHome = path.join(BUILD_ROOT, 'firefox-home');
+fs.mkdirSync(firefoxHome, { recursive: true });
+const firefoxEnv = { ...process.env, CFFIXED_USER_HOME: firefoxHome };
 
 // `test/` holds the DOM-free node:test units; `tests/` holds these browser
 // tests, which are what actually cover the drawing tools.
@@ -20,7 +27,7 @@ module.exports = defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'], launchOptions: { env: firefoxEnv } } },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } }
   ],
   webServer: [
