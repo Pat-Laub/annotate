@@ -205,3 +205,29 @@ for (const ev of LECTURE) {
     expect(rubs, ev.erase ? 'the scribble did not erase' : 'the scribble erased').toBe(ev.erase ? 1 : 0);
   });
 }
+
+// Cut short where the scribble has made its point. A letter is gone after three
+// sweeps, not four; a word is gone while the scribble still overshoots it, its
+// box sticking out past the word's ends.
+const EARLY = [
+  { event: 12, points: 57, why: 'three sweeps across a letter' },
+  { event: 9, points: 104, why: 'a scribble overshooting a word' }
+];
+
+for (const { event, points, why } of EARLY) {
+  test(`lecture scribble #${event} erases after ${why}`, async ({ page }) => {
+    const ev = LECTURE.find(e => e.event === event);
+    await openPad(page);
+    await page.evaluate(() => {
+      window.inkMessages = [];
+      document.addEventListener('send', event => window.inkMessages.push(event.content));
+    });
+    await tool(page, ev.tool).click();
+    await drag(page, ev.target, 1);
+    await drag(page, ev.scribble.slice(0, points), 1);
+
+    const rubs = await page.evaluate(() =>
+      window.inkMessages.filter(m => m.a === 'rub').length);
+    expect(rubs, 'the scribble did not erase').toBe(1);
+  });
+}
