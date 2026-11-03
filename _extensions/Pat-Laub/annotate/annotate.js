@@ -124,11 +124,16 @@
   // the top to start them reads as the doubling back. `progress` is what tells
   // the two apart -- a scribble sweeps without travelling, and the same
   // lecture's near miss scored 0.006 against a B's 0.145 at worst.
+  //
+  // `reversals` went to 4 alongside `progress`, but the B has four of its own
+  // and only `progress` stops it; at 4 a meant scribble had to keep going half
+  // its length again before it fired. `overlap` was 0.5, and a scribble that
+  // overshoots a word's ends falls under it until it has filled them in.
   var SCRIBBLE = {
-    reversals: 4,   // direction reversals along the long axis
+    reversals: 3,   // direction reversals along the long axis
     travel: 10,     // how far a reversal must go to be one, not end-of-stroke wobble
     progress: 0.09, // net displacement over path length: a scribble goes nowhere
-    overlap: 0.5,   // bounding-box overlap needed before counting crossings
+    overlap: 0.3,   // bounding-box overlap needed before counting crossings
     crossings: 3,   // crossings with a *single* stroke before it is erased
     size: 90,       // smallest scribble that erases; below it, a point is being filled in
     elongated: 5,   // a stroke this many times longer than wide is a line...
