@@ -218,6 +218,27 @@ test('the mode caption matches the chip, at the bottom', async ({ page }) => {
   expect(caption).toEqual(pill);
 });
 
+// A projected screen is not to carry a permanent caption, however small.
+test('the chip fades once the window is left alone, and the pointer brings it back', async ({ page }) => {
+  await openProjected(page);
+  await page.keyboard.press('ArrowRight');
+  await expect(chip(page)).toBeVisible();
+
+  await expect(chip(page), 'the chip stayed on the projector').toBeHidden({ timeout: 15_000 });
+
+  await page.mouse.move(100, 100);
+  await expect(chip(page)).toBeVisible();
+});
+
+test('a slide change brings the faded chip back', async ({ page }) => {
+  await openProjected(page);
+  await page.keyboard.press('ArrowRight');
+  await expect(chip(page)).toBeHidden({ timeout: 15_000 });
+
+  await page.keyboard.press('ArrowLeft');
+  await expect(chip(page)).toBeVisible();
+});
+
 test('the chip still shows in full screen', async ({ page }) => {
   await openProjected(page);
   await page.keyboard.press('f');
