@@ -164,6 +164,19 @@ window.RevealMultiplex = {
 		deck.on( 'ready', scaleChip );
 		window.addEventListener( 'resize', scaleChip );
 
+		// A projected screen is not to carry a permanent caption either: the
+		// messages fade once the window is left alone, and the pointer or a
+		// slide change brings them back for a few seconds.
+		var QUIET_MS = 5000, quiet = null;
+		function wake() {
+			document.documentElement.classList.remove( 'multiplex-quiet' );
+			clearTimeout( quiet );
+			quiet = setTimeout( function () { document.documentElement.classList.add( 'multiplex-quiet' ); }, QUIET_MS );
+		}
+		document.addEventListener( 'pointermove', wake, true );
+		document.addEventListener( 'pointerdown', wake, true );
+		deck.on( 'slidechanged', wake );
+
 		if ( role === 'audience' ) deck.on( 'ready', function () {
 			deck.on( 'slidechanged', function () { if ( !applying ) detach(); } );
 		} );
@@ -389,8 +402,10 @@ window.RevealMultiplex = {
 				box.className = 'multiplex-notice';
 				layer().appendChild( box );
 			}
+			if ( box.textContent === text && box.style.display === 'block' ) return;
 			box.textContent = text;
 			box.style.display = 'block';
+			wake();
 		}
 		function clearNotice() { if ( box ) box.style.display = 'none'; }
 		function deckName( p ) {
