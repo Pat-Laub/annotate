@@ -89,7 +89,7 @@ test('a print export prints the deck with its ink on it', async ({ page }) => {
 });
 
 // A viewer keeps no ink in storage, so the print view has to be handed it.
-test('a viewer prints the ink it was sent, when the presenter asks', async ({ page }) => {
+test('a viewer prints the ink it was sent', async ({ page }) => {
   await stubPrint(page);
   await openPad(page);
   await drawStroke(page);
@@ -104,18 +104,15 @@ test('a viewer prints the ink it was sent, when the presenter asks', async ({ pa
   await usePrint(page);
   await receive(page, { a: 'all', ink: stored }, false);
 
-  // The window beside the presenter's is the same device: it leaves it alone.
-  await receive(page, { a: 'export' }, true);
-  await expect(page.locator('iframe.ink-export')).toHaveCount(0);
-
-  await receive(page, { a: 'export' }, false);
+  await page.keyboard.press('c');
+  await openMore(page);
+  await act(page, 'pdf').click();
   await expect.poll(() => printed(page), { message: 'nothing was printed' }).toHaveLength(1);
   expect((await printed(page))[0].inked, 'the print view had no ink').toBeGreaterThan(0);
 });
 
-// A presenting iPad prints to A4 whatever the page asks for, so the export is
-// made on the screen being watched.
-test('a presenter hands a print export to the viewer', async ({ page }) => {
+// Whichever screen is asked makes the export: nothing is handed across.
+test('a presenter prints its own export', async ({ page }) => {
   await stubPrint(page);
   await page.addInitScript(() => { window.__multiplex = { role: 'presenter', token: 'test-token' }; });
   await openPad(page);
@@ -127,9 +124,51 @@ test('a presenter hands a print export to the viewer', async ({ page }) => {
   await openMore(page);
   await act(page, 'pdf').click();
 
-  expect(await page.evaluate(() => window.sent.filter(m => m.a === 'export')),
-    'the viewer was not asked').toHaveLength(1);
-  await expect(page.locator('.multiplex-mode', { hasText: 'projected' })).toBeVisible();
+  await expect.poll(() => printed(page), { message: 'nothing was printed' }).toHaveLength(1);
+  expect(await page.evaluate(() => window.sent.filter(m => m.a === 'export'))).toHaveLength(0);
+});
+
+// The deck can look at an export before it is made, and call it off.
+test('an export can be called off by the deck', async ({ page }) => {
+  await stubPrint(page);
+  await openPad(page);
+  await usePrint(page);
+  await page.evaluate(() => {
+    document.addEventListener('annotate-export', e => {
+      window.asked = e.detail.mode;
+      e.preventDefault();
+    });
+  });
+  await openMore(page);
+  await act(page, 'pdf').click();
+
+  expect(await page.evaluate(() => window.asked)).toBe('print');
   await expect(page.locator('iframe.ink-export')).toHaveCount(0);
   expect(await printed(page)).toHaveLength(0);
+});
+
+// An iPad prints to A4 whatever the page asks for, so there a `print` deck
+// overlays the published PDF instead.
+test.describe('on an iPad', () => {
+  test.use({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15' });
+
+  test('a print deck overlays the published PDF', async ({ page }) => {
+    await stubPrint(page);
+    await page.addInitScript(() => {
+      Object.defineProperty(Navigator.prototype, 'maxTouchPoints', { get: () => 5 });
+    });
+    await openPad(page);
+    await usePrint(page);
+    await page.evaluate(() => {
+      document.addEventListener('annotate-export', e => { window.asked = e.detail.mode; });
+    });
+    await openMore(page);
+    const asked = page.waitForRequest(/\/docs\/index\.pdf/);
+    await act(page, 'pdf').click();
+
+    await asked;
+    expect(await page.evaluate(() => window.asked)).toBe('overlay');
+    await expect(page.locator('iframe.ink-export')).toHaveCount(0);
+    expect(await printed(page)).toHaveLength(0);
+  });
 });
