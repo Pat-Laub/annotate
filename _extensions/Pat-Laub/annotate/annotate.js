@@ -960,11 +960,13 @@
   // deck's own typography rather than redrawing it. `{deck}` is this deck's
   // path with its extension dropped -- the same file the deck's own
   // "Slides (pdf)" link points at -- and any other URL works just as well.
+  // `print` has the browser print reveal's own print view of the deck as this
+  // window has it, so nothing needs publishing first.
   function pdfOptions() {
     var cfg = window.Reveal && Reveal.getConfig ? Reveal.getConfig() : null;
     var o = (cfg && cfg.annotate) || {};
     return {
-      mode: o.pdf === 'overlay' ? 'overlay' : 'generate',
+      mode: o.pdf === 'overlay' || o.pdf === 'print' ? o.pdf : 'generate',
       source: o.pdfSource || '{deck}.pdf'
     };
   }
@@ -1023,6 +1025,7 @@
   }
 
   function downloadPdf() {
+    if (pdfOptions().mode === 'print') return exportPrint();
     if (!window.AnnotationPdf) return printPdf();
     try {
       var pages = printableSlides().map(function (slide) {
@@ -1059,6 +1062,43 @@
     }
   }
 
+  // A presenting iPad prints to A4 whatever the page asks for, so a presenter
+  // leaves the printing to the screen being watched.
+  function exportPrint() {
+    if (MUX !== 'presenter') return printFrame();
+    send({ a: 'export' });
+    var caption = document.createElement('div');
+    caption.className = 'multiplex-mode';
+    caption.textContent = 'Export sent to the projected window';
+    (document.fullscreenElement || document.webkitFullscreenElement || document.body).appendChild(caption);
+    setTimeout(function () { caption.remove(); }, 4000);
+  }
+
+  // The print view is a fresh load of the deck, out of sight in this window.
+  // It is handed this window's ink, packed as it is for a viewer: a viewer has
+  // none in storage to read back.
+  function printFrame() {
+    var old = document.querySelector('iframe.ink-export');
+    if (old) old.remove();
+    window.__annotatePrint = { ink: AnnotationCodec.packInk(kept()) };
+    var url = new URL(location.href);
+    url.hash = '';
+    url.search = '?print-pdf&pdfMaxPagesPerSlide=1&ink=1';
+    var frame = document.createElement('iframe');
+    frame.className = 'ink-export';
+    frame.src = url.href;
+    document.body.appendChild(frame);
+  }
+
+  function handedInk() {
+    try {
+      var from = window.opener || (window.parent !== window ? window.parent : null);
+      return from && from.__annotatePrint ? AnnotationCodec.unpackInk(from.__annotatePrint.ink) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   // Open Reveal's own one-slide-per-page print view. Both windows share the
   // same localStorage origin, so the print window can lay the current ink and
   // ruled-guide preference over the pages without uploading either anywhere.
@@ -1077,17 +1117,22 @@
     W = size[0];
     H = size[1];
     view = [-OVERSCAN * W, -OVERSCAN * H, (1 + 2 * OVERSCAN) * W, (1 + 2 * OVERSCAN) * H];
+    // An export is the deck as it was shown, which is without the guides.
+    var handed = handedInk();
+    if (handed) { ink = handed; ruled = false; }
     var finished = false;
     function layOut() {
       if (finished) return true;
       var pages = document.querySelectorAll('.pdf-page');
       if (!pages.length) return false;
       finished = true;
-      var annotated = 0;
-      pages.forEach(function (page) { if (layPrintPage(page)) annotated += 1; });
+      // Laid out once the pages have settled: the deck may resize them first.
       settled().then(function () {
+        var annotated = 0;
+        pages.forEach(function (page) { if (layPrintPage(page)) annotated += 1; });
         printBar(annotated, pages.length);
         window.print();
+        if (window.frameElement) window.frameElement.remove();
       });
       return true;
     }
@@ -1108,9 +1153,13 @@
     var list = ink[AnnotationModel.slideKey(slide)] || [];
     var pr = page.getBoundingClientRect();
     var sr = slide.getBoundingClientRect();
-    var scale = (sr.width / W) || 1;
-    var left = (pr.width - W * scale) / 2;
-    var top = (pr.height - H * scale) / 2;
+    // Ink on a stage is in the coordinates of the authored page, not of the
+    // slide inside it. Where the deck prints that whole page, the ink covers it.
+    var whole = !!document.querySelector('[data-deck-stage]') &&
+      Math.abs(pr.width / pr.height / (W / H) - 1) < 0.01;
+    var scale = ((whole ? pr.width : sr.width) / W) || 1;
+    var left = whole ? 0 : (pr.width - W * scale) / 2;
+    var top = whole ? 0 : (pr.height - H * scale) / 2;
     page.style.position = 'relative';
 
     if (ruled) {
@@ -1164,10 +1213,15 @@
         img.addEventListener('error', resolve, { once: true });
       });
     });
+    var loaded = document.readyState === 'complete' ? Promise.resolve()
+      : new Promise(function (resolve) { window.addEventListener('load', resolve, { once: true }); });
+    // Anything else the deck does to its print view says so in `printPending`.
     return Promise.race([
-      Promise.all([fonts].concat(images)),
+      Promise.all([fonts, loaded].concat(images)),
       new Promise(function (resolve) { setTimeout(resolve, 5000); })
-    ]);
+    ]).then(function () {
+      return Promise.all(window.printPending || []).catch(function () {});
+    });
   }
 
   // Keep a small retry strip in the print window in case the dialog is closed
@@ -1413,6 +1467,9 @@
         fading.add(scribbling.stroke);
         if (scribbling.trail) scribbling.trail.fade();
       }
+    } else if (msg.a === 'export') {
+      // Not the window beside the presenter's, which is the same device.
+      if (MUX === 'viewer' && !local && pdfOptions().mode === 'print') printFrame();
     } else if (msg.a === 'laser') {
       receiveLaser(msg, local);
     } else if (incoming[msg.i]) {
