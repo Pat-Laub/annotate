@@ -48,3 +48,88 @@ test('an export carries what was erased, and what took it', async ({ page }) => 
   // Thresholds move; a log read next month has to say what judged it.
   expect(payload.scribble.crossings, 'the thresholds in force are not recorded').toBeDefined();
 });
+
+// A deck set to `print` exports reveal's own print view of itself rather than
+// a file published beforehand. The dialog is the browser's, so the tests stand
+// in for it and note what the print view held when it was asked to print.
+const stubPrint = page => page.addInitScript(() => {
+  window.print = () => {
+    window.top.printed = (window.top.printed || []).concat({
+      pages: document.querySelectorAll('.pdf-page').length,
+      inked: document.querySelectorAll('.pdf-page .ink-print.ink-pen path').length,
+      ruled: document.querySelectorAll('.pdf-page .ink-print-rules').length
+    });
+  };
+});
+const usePrint = page => page.evaluate(() => {
+  Reveal.configure({ annotate: Object.assign({}, Reveal.getConfig().annotate, { pdf: 'print' }) });
+});
+const receive = (page, content, local) => page.evaluate(([c, l]) => {
+  const e = new CustomEvent('received');
+  e.content = c;
+  e.local = l;
+  document.dispatchEvent(e);
+}, [content, local]);
+const printed = page => page.evaluate(() => window.printed || []);
+
+test('a print export prints the deck with its ink on it', async ({ page }) => {
+  await stubPrint(page);
+  await openPad(page);
+  await usePrint(page);
+  await drawStroke(page);
+  await openMore(page);
+  await act(page, 'pdf').click();
+
+  await expect.poll(() => printed(page), { message: 'nothing was printed' }).toHaveLength(1);
+  const [view] = await printed(page);
+  expect(view.pages, 'the print view had no pages').toBeGreaterThan(0);
+  expect(view.inked, 'the print view had no ink').toBeGreaterThan(0);
+  expect(view.ruled, 'the writing guides were printed').toBe(0);
+  await expect(page.locator('iframe.ink-export'), 'the print view was left behind').toHaveCount(0);
+});
+
+// A viewer keeps no ink in storage, so the print view has to be handed it.
+test('a viewer prints the ink it was sent, when the presenter asks', async ({ page }) => {
+  await stubPrint(page);
+  await openPad(page);
+  await drawStroke(page);
+  const saved = () => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('reveal-ink-v7:' + location.pathname)));
+  await expect.poll(saved, { message: 'the stroke was not saved' }).toBeTruthy();
+  const stored = await saved();
+
+  await page.goto('/docs/index.html?project');
+  await page.locator('.ink-panel').waitFor({ state: 'attached' });
+  await page.evaluate(() => localStorage.clear());
+  await usePrint(page);
+  await receive(page, { a: 'all', ink: stored }, false);
+
+  // The window beside the presenter's is the same device: it leaves it alone.
+  await receive(page, { a: 'export' }, true);
+  await expect(page.locator('iframe.ink-export')).toHaveCount(0);
+
+  await receive(page, { a: 'export' }, false);
+  await expect.poll(() => printed(page), { message: 'nothing was printed' }).toHaveLength(1);
+  expect((await printed(page))[0].inked, 'the print view had no ink').toBeGreaterThan(0);
+});
+
+// A presenting iPad prints to A4 whatever the page asks for, so the export is
+// made on the screen being watched.
+test('a presenter hands a print export to the viewer', async ({ page }) => {
+  await stubPrint(page);
+  await page.addInitScript(() => { window.__multiplex = { role: 'presenter', token: 'test-token' }; });
+  await openPad(page);
+  await usePrint(page);
+  await page.evaluate(() => {
+    window.sent = [];
+    document.addEventListener('send', e => window.sent.push(e.content));
+  });
+  await openMore(page);
+  await act(page, 'pdf').click();
+
+  expect(await page.evaluate(() => window.sent.filter(m => m.a === 'export')),
+    'the viewer was not asked').toHaveLength(1);
+  await expect(page.locator('.multiplex-mode', { hasText: 'projected' })).toBeVisible();
+  await expect(page.locator('iframe.ink-export')).toHaveCount(0);
+  expect(await printed(page)).toHaveLength(0);
+});
