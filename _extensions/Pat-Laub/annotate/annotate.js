@@ -1025,7 +1025,10 @@
   }
 
   function downloadPdf() {
-    if (pdfOptions().mode === 'print') return exportPrint();
+    var mode = exportMode();
+    var ask = new CustomEvent('annotate-export', { cancelable: true, detail: { mode: mode } });
+    if (!document.dispatchEvent(ask)) return;
+    if (mode === 'print') return printFrame();
     if (!window.AnnotationPdf) return printPdf();
     try {
       var pages = printableSlides().map(function (slide) {
@@ -1046,7 +1049,7 @@
         };
       });
       var wanted = pdfOptions();
-      if (wanted.mode === 'overlay') return overlayPublishedPdf(overlayPages(), wanted);
+      if (mode === 'overlay') return overlayPublishedPdf(overlayPages(), wanted);
       var data = AnnotationPdf.create({
         width: W,
         height: H,
@@ -1062,16 +1065,13 @@
     }
   }
 
-  // A presenting iPad prints to A4 whatever the page asks for, so a presenter
-  // leaves the printing to the screen being watched.
-  function exportPrint() {
-    if (MUX !== 'presenter') return printFrame();
-    send({ a: 'export' });
-    var caption = document.createElement('div');
-    caption.className = 'multiplex-mode';
-    caption.textContent = 'Export sent to the projected window';
-    (document.fullscreenElement || document.webkitFullscreenElement || document.body).appendChild(caption);
-    setTimeout(function () { caption.remove(); }, 4000);
+  // An iPad prints to A4 whatever the page asks for, so there a `print` deck
+  // falls back to the published PDF.
+  function exportMode() {
+    var mode = pdfOptions().mode;
+    var ipad = /iP(ad|hone|od)/.test(navigator.userAgent) ||
+      (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+    return mode === 'print' && ipad ? 'overlay' : mode;
   }
 
   // The print view is a fresh load of the deck, out of sight in this window.
@@ -1467,9 +1467,6 @@
         fading.add(scribbling.stroke);
         if (scribbling.trail) scribbling.trail.fade();
       }
-    } else if (msg.a === 'export') {
-      // Not the window beside the presenter's, which is the same device.
-      if (MUX === 'viewer' && !local && pdfOptions().mode === 'print') printFrame();
     } else if (msg.a === 'laser') {
       receiveLaser(msg, local);
     } else if (incoming[msg.i]) {
@@ -2422,6 +2419,24 @@
     document.documentElement.classList.toggle('ink-chrome-off', !on);
   }
 
+  // On a projected screen the corner row also comes up under the mouse, and
+  // goes again once the mouse has left both it and the panel.
+  var hovered = false, away = 0;
+  function hoverChrome(e) {
+    var near = e.clientX < window.innerWidth * 0.2 && e.clientY > window.innerHeight * 0.75;
+    if (near || (hovered && e.target.closest && e.target.closest('.ink-panel, .deck-launchers'))) {
+      clearTimeout(away);
+      away = 0;
+      if (!chrome) { hovered = true; showChrome(true); }
+    } else if (hovered && !away) {
+      away = setTimeout(function () {
+        away = 0;
+        hovered = false;
+        showChrome(false);
+      }, 1500);
+    }
+  }
+
   function inkColour() {
     return tool === 'highlighter' && colour === BLACK[1] ? HIGHLIGHT : colour;
   }
@@ -3216,6 +3231,7 @@
     folded = readFolded();
     if (toolsOpen && !tool) open(true);
     showChrome(chrome);
+    if (MUX === 'viewer') window.addEventListener('mousemove', hoverChrome);
 
     // Every window shows what the transport hands it. Every window but a viewer
     // is also told when one joins, and answers with the ink drawn before it
