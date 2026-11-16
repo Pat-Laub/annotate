@@ -1,0 +1,18 @@
+---
+pagetitle: Annotate fixture whose controls auto-hide
+format:
+  slide-stage-revealjs:
+    stage-chrome: auto-hide
+    annotate:
+      tools: closed
+      pages: false
+      delay: 0
+---
+
+## A deck shown on a projector {#projected-one}
+
+Its arrows and corner buttons come up only while the mouse moves.
+
+## A second slide {#projected-two}
+
+Somewhere for the arrows to go.

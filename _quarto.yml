@@ -8,6 +8,7 @@ project:
     - controls.qmd
     - docked.qmd
     - portrait.qmd
+    - projected.qmd
 
 # The fixture decks the tests measure. `index.qmd` opts into page growth so the
 # page machinery is exercised; `no-pages.qmd` leaves it at its default so the

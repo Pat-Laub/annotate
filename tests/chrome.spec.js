@@ -94,27 +94,33 @@ test('C hides and shows the corner buttons', async ({ page }) => {
     document.documentElement.classList.contains('ink-chrome-on'))).toBe(true);
 });
 
-// A projected screen has no corner buttons, and C is easy to forget: resting
-// the mouse in that corner brings them up, and taking it away drops them.
-test('the corner buttons come up under the mouse on a projected screen', async ({ page }) => {
-  await page.goto('/docs/index.html?project');
+// A projected screen leaves its arrows and corner buttons to slide-stage's
+// `stage-chrome: auto-hide`: out of sight until the mouse moves anywhere, and
+// gone again once it rests. C still takes the corner row away outright.
+test('a projected screen shows its controls while the mouse moves', async ({ page }) => {
+  await page.goto('/docs/projected.html?project');
   await page.locator('.ink-panel').waitFor({ state: 'attached' });
-  const row = page.locator('.deck-launchers');
-  await expect(row).toBeHidden();
+  const shown = sel => page.locator(sel).evaluate(el => {
+    const s = getComputedStyle(el);
+    return s.display !== 'none' && Number(s.opacity) > 0.95;
+  });
   const { width, height } = page.viewportSize();
+  expect(await shown('.deck-launchers')).toBe(false);
+  expect(await shown('.reveal .controls')).toBe(false);
 
   await page.mouse.move(width / 2, height / 2);
-  await expect(row).toBeHidden();
-  await page.mouse.move(20, height - 20);
-  await expect(row).toBeVisible();
+  await page.mouse.move(width / 2 + 40, height / 2);
+  await expect.poll(() => shown('.deck-launchers')).toBe(true);
+  await expect.poll(() => shown('.reveal .controls')).toBe(true);
 
+  await expect.poll(() => shown('.deck-launchers'), { timeout: 5000 }).toBe(false);
+
+  await page.keyboard.press('c');
   await page.mouse.move(width / 2, height / 2);
-  await expect(row).toBeHidden();
+  await page.waitForTimeout(500);
+  expect(await shown('.deck-launchers')).toBe(false);
 
-  // The panel is where the mouse was going.
-  await page.mouse.move(20, height - 20);
-  const panel = await page.locator('.ink-panel').boundingBox();
-  await page.mouse.move(panel.x + panel.width / 2, panel.y + panel.height / 2);
-  await page.waitForTimeout(2500);
-  await expect(row).toBeVisible();
+  await page.keyboard.press('c');
+  await page.mouse.move(width / 2 + 40, height / 2);
+  await expect.poll(() => shown('.deck-launchers')).toBe(true);
 });
