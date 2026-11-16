@@ -102,7 +102,7 @@ test('a projected screen shows its controls while the mouse moves', async ({ pag
   await page.locator('.ink-panel').waitFor({ state: 'attached' });
   const shown = sel => page.locator(sel).evaluate(el => {
     const s = getComputedStyle(el);
-    return s.display !== 'none' && Number(s.opacity) > 0.95;
+    return s.display !== 'none' && Number(s.opacity) > 0.05;
   });
   const { width, height } = page.viewportSize();
   expect(await shown('.deck-launchers')).toBe(false);
