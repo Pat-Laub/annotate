@@ -104,7 +104,6 @@ test('a viewer prints the ink it was sent', async ({ page }) => {
   await usePrint(page);
   await receive(page, { a: 'all', ink: stored }, false);
 
-  await page.keyboard.press('c');
   await openMore(page);
   await act(page, 'pdf').click();
   await expect.poll(() => printed(page), { message: 'nothing was printed' }).toHaveLength(1);

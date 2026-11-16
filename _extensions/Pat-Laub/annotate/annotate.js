@@ -24,7 +24,7 @@
 (function () {
   if (!window.perfectFreehand) return;
   // The release this is; release-extension.sh refuses a tag that disagrees.
-  var VERSION = '0.50.0';
+  var VERSION = '0.51.0';
   var getStroke = perfectFreehand.getStroke;
 
   /* ---------------------------- configuration ---------------------------- */
@@ -218,7 +218,7 @@
   var toolsOpen = false;
   var tool = null;
   var lastTool = 'pen';      // restored after temporarily hiding the tools
-  var chrome = MUX !== 'viewer';  // the bottom-left corner buttons are on show
+  var chrome = true;  // the bottom-left corner buttons are on show
   var ruled = readRules();    // local view preference; never part of shared ink
   var ruleSpacing = readRuleSpacing(); // browser-local guide density
   var pressureEnabled = readPressure(); // captured into each new stroke's points
@@ -2409,32 +2409,13 @@
 
   // The colour this tool draws in: the swatch's own, except that the first one
   // is a highlighter's yellow while the highlighter is out.
-  // The buttons in the bottom-left corner. A projected screen drops them (see
-  // annotate.scss), which is right nearly always -- and "nearly" is what C is
-  // for: it puts them back on that screen when it is the only one to hand, and
-  // takes them away on a presenting screen when the corner is in the way.
+  // The buttons in the bottom-left corner. A deck with slide-stage's
+  // `stage-chrome: auto-hide` shows them only while the mouse moves; C takes
+  // them away outright when the corner is in the way, and puts them back.
   function showChrome(on) {
     chrome = on;
     document.documentElement.classList.toggle('ink-chrome-on', on);
     document.documentElement.classList.toggle('ink-chrome-off', !on);
-  }
-
-  // On a projected screen the corner row also comes up under the mouse, and
-  // goes again once the mouse has left both it and the panel.
-  var hovered = false, away = 0;
-  function hoverChrome(e) {
-    var near = e.clientX < window.innerWidth * 0.2 && e.clientY > window.innerHeight * 0.75;
-    if (near || (hovered && e.target.closest && e.target.closest('.ink-panel, .deck-launchers'))) {
-      clearTimeout(away);
-      away = 0;
-      if (!chrome) { hovered = true; showChrome(true); }
-    } else if (hovered && !away) {
-      away = setTimeout(function () {
-        away = 0;
-        hovered = false;
-        showChrome(false);
-      }, 1500);
-    }
   }
 
   function inkColour() {
@@ -3231,7 +3212,6 @@
     folded = readFolded();
     if (toolsOpen && !tool) open(true);
     showChrome(chrome);
-    if (MUX === 'viewer') window.addEventListener('mousemove', hoverChrome);
 
     // Every window shows what the transport hands it. Every window but a viewer
     // is also told when one joins, and answers with the ink drawn before it
