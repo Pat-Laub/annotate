@@ -133,10 +133,10 @@ test('a finger swipe turns the page with a tool in hand', async ({ page }) => {
     { message: 'the swipe did not turn the page' }).toBe(1);
 });
 
-// A title slide is a short box centred on the page, so below it the topmost
-// thing under a finger is reveal's slide background, outside `.slides`. That
-// is the page, not a control to stand aside for, and the swipe still has to
-// reach reveal.
+// A title slide is a short box centred on the page, so below it a finger is
+// over nothing of the slide's: slide-stage keeps the backgrounds out of hit
+// testing, so the stage itself is what lies there. That is the page, not a
+// control to stand aside for, and the swipe still has to reach reveal.
 test('a finger swipe over bare slide background turns the page', async ({ page }) => {
   await page.goto('/docs/no-pages.html');
   await page.waitForFunction(() => window.Reveal && Reveal.isReady());
@@ -150,7 +150,7 @@ test('a finger swipe over bare slide background turns the page', async ({ page }
     const box = document.querySelector('.ink-surface').getBoundingClientRect();
     const x = box.left + box.width * 0.8, y = box.top + box.height * 0.85;
     const top = document.elementsFromPoint(x, y).find(el => !el.classList.contains('ink-surface'));
-    return top && !!top.closest('.backgrounds');
+    return !!top && !top.closest('.slides, button');
   });
   expect(under, 'the test point is not over bare slide background').toBe(true);
 
